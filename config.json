@@ -1,0 +1,13 @@
+{
+  "mode": "simulator",
+  "fee_bps_stock": 5,
+  "fee_bps_crypto": 25,
+  "stock_symbols": ["SPY", "NVDA", "AAPL", "MSFT"],
+  "crypto_symbols": ["BTC/USD", "ETH/USD", "SOL/USD"],
+  "sleeve_capital": 5000.0,
+  "min_trade_notional": 10.0,
+  "sleeve_max_drawdown": 0.15,
+  "account_max_drawdown": 0.20,
+  "sleeves": ["S1","S2","S3","S4","S5","S6","S7","S8","S9","S10",
+              "P1","P2","P3","P4","P5","P6","P7","P8","P9","P10"]
+}
