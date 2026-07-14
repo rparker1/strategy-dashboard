@@ -73,11 +73,11 @@ def push():
         print("no changes to commit")
     r = sh("git", "push", "-u", "origin", "main")
     if r.returncode != 0:
-        # remote may have history this container lacks (fresh clone divergence)
-        sh("git", "fetch", "origin")
-        r2 = sh("git", "push", "-u", "origin", "main", "--force-with-lease")
+        # concurrent check-in pushed first: merge (journal merges by union), retry
+        sh("git", "-c", "pull.rebase=false", "pull", "origin", "main", "--no-edit")
+        r2 = sh("git", "push", "-u", "origin", "main")
         if r2.returncode != 0:
-            raise RuntimeError(f"push failed: {r.stderr[-300:]} / {r2.stderr[-300:]}")
+            raise RuntimeError(f"push failed after merge: {r2.stderr[-300:]}")
     print(f"pushed -> https://github.com/{USER}/{REPO} ; site https://{USER}.github.io/{REPO}/")
 
 

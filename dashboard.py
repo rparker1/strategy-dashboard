@@ -302,34 +302,50 @@ h1{{font-size:1.05rem;margin:18px 0 6px;color:#c3c2b7;font-weight:600;letter-spa
 .runcard summary{{list-style:none}} .runcard summary::-webkit-details-marker{{display:none}}
 .runcard summary::before{{content:"▸ ";color:#898781}} .runcard[open] summary::before{{content:"▾ "}}
 .note{{background:#1d2333;border-left:3px solid #3987e5;padding:9px 10px;margin:8px 0;border-radius:6px;font-size:.85rem}}
+section.tab{{display:none}} section.tab.active{{display:block;animation:fade .15s ease}}
+@keyframes fade{{from{{opacity:.4}}to{{opacity:1}}}}
+nav.tabs{{position:fixed;bottom:0;left:0;right:0;display:flex;background:rgba(15,17,21,.92);backdrop-filter:blur(12px);border-top:1px solid rgba(255,255,255,.08);padding-bottom:env(safe-area-inset-bottom);z-index:10}}
+nav.tabs a{{flex:1;text-align:center;padding:9px 0 7px;text-decoration:none;color:#898781;font-size:.66rem;line-height:1.3}}
+nav.tabs a .ico{{display:block;font-size:1.15rem;margin-bottom:1px;filter:grayscale(1) opacity(.6)}}
+nav.tabs a.active{{color:#3987e5;font-weight:600}}
+nav.tabs a.active .ico{{filter:none}}
+.topbar{{position:sticky;top:0;background:rgba(15,17,21,.92);backdrop-filter:blur(12px);z-index:9;padding:10px 0 8px;margin:0 -14px;padding-left:14px;padding-right:14px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;justify-content:space-between;align-items:baseline}}
 .doc p{{font-size:.85rem;color:#c3c2b7;line-height:1.5}}
 .doc b{{color:#e8eaed}}
 footer{{margin:22px 0 10px;color:#898781;font-size:.72rem;line-height:1.5}}
+body{{padding-bottom:76px}}
 </style></head><body>
-<div class="sub" style="margin-top:4px">STRATEGY TEST — SIMULATED $100,000 · 20 SLEEVES · 7 SYMBOLS</div>
+<div class="topbar"><span style="font-weight:650">Strategy Test</span>
+<span class="{'pos' if tret>=0 else 'neg'}" style="font-size:.95rem">{tret:+.2%} · {money(total)}</span></div>
+
+<section class="tab" id="overview">
+<div class="sub" style="margin-top:10px">SIMULATED $100,000 · 20 SLEEVES · 7 SYMBOLS</div>
 <div class="hero" style="color:{up}">{tret:+.2%}</div>
 <div class="sub">{money(total)} total · updated {now.strftime('%a %d %b %Y, %H:%M')} UTC · day {max(1,(now.date()-dt.date(2026,7,13)).days+1)} of ~90</div>
 {banner}
-
 <h1>Account equity</h1>
 <div class="panel">{equity_chart(curve)}</div>
-
 <h1>Vitals</h1>
 <div class="kpis">{kpis}</div>
-
 <h1>Net exposure by symbol</h1>
 <div class="panel">{exposure_bars(exposure, total)}
 <div class="sub" style="margin-top:8px">Blue = net long, red = net short, summed across all 20 sleeves. % is of total account equity.</div></div>
+</section>
 
-<h1>Strategy sleeves — tap to expand</h1>
+<section class="tab" id="strategies">
+<h1 style="margin-top:14px">Strategy sleeves — tap to expand</h1>
 {"".join(cards)}
+</section>
 
-<h1>Check-in history — every session, every decision</h1>
+<section class="tab" id="history">
+<h1 style="margin-top:14px">Check-in history — every session, every decision</h1>
 <div class="panel">
 <div class="sub" style="margin-bottom:6px">{len(runs)} check-ins journaled. Tap a session to see its fills. 🧭 = strategic decision by the reviewing agent, 📋 = weekly review.</div>
 {"".join(feed) or '<div class="sub">No runs journaled yet.</div>'}</div>
+</section>
 
-<h1>How this test works</h1>
+<section class="tab" id="about">
+<h1 style="margin-top:14px">How this test works</h1>
 <div class="panel doc">
 <p><b>Setup.</b> $100,000 of simulated money split into twenty $5,000 sleeves. S1–S10 run the same rules independently on each of 7 symbols (SPY, NVDA, AAPL, MSFT, BTC, ETH, SOL); P1–P10 trade the whole universe as a portfolio. Fills happen at live fetched prices <b>minus a fee/slippage haircut</b> (5bps stocks, 25bps crypto) — deliberately harsher than most paper-trading platforms, which fill at perfect prices.</p>
 <p><b>Risk rules (enforced in code).</b> A sleeve losing 15% from its peak is frozen and flagged for review. No sleeve may exceed 1.5× its capital. If the whole account draws down 20%, everything goes flat and stays flat until the human says otherwise.</p>
@@ -337,8 +353,33 @@ footer{{margin:22px 0 10px;color:#898781;font-size:.72rem;line-height:1.5}}
 <p><b>What we honestly expect.</b> Over one quarter, most of these 20 will be statistically indistinguishable from noise. The genuinely interesting outputs are the ensemble-vs-members comparison (P7), the regime switcher (P10), and learning which strategy <i>types</i> suit which market regimes.</p>
 <p><b>Operations.</b> Checked twice daily (07:00 & 21:15 UTC) by scheduled runs that refresh data, execute signals, apply risk rules, journal every decision with its reason, and republish this page. Crypto data: Kraken. Stocks: Alpha Vantage (daily bars). The full project — code, data, and this journal — is version-controlled on every run.</p>
 </div>
-
 <footer>Simulated money only — nothing here is investment advice, and paper results overstate live results even with the fee haircut. Data: Kraken (crypto, 24/7), Alpha Vantage (US equities, daily). Page refreshes at every check-in; installed as an app it shows the last snapshot when offline.</footer>
+</section>
+
+<nav class="tabs">
+<a href="#overview" data-tab="overview"><span class="ico">📊</span>Overview</a>
+<a href="#strategies" data-tab="strategies"><span class="ico">🧩</span>Strategies</a>
+<a href="#history" data-tab="history"><span class="ico">🕑</span>History</a>
+<a href="#about" data-tab="about"><span class="ico">ℹ️</span>About</a>
+</nav>
+<script>
+(function() {{
+  var tabs = ["overview","strategies","history","about"];
+  function show() {{
+    var t = location.hash.replace("#","");
+    if (tabs.indexOf(t) < 0) t = "overview";
+    tabs.forEach(function(id) {{
+      document.getElementById(id).classList.toggle("active", id === t);
+    }});
+    document.querySelectorAll("nav.tabs a").forEach(function(a) {{
+      a.classList.toggle("active", a.dataset.tab === t);
+    }});
+    window.scrollTo(0, 0);
+  }}
+  window.addEventListener("hashchange", show);
+  show();
+}})();
+</script>
 </body></html>'''
     with open(OUT, "w") as f:
         f.write(html)
