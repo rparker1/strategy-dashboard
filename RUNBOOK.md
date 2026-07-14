@@ -4,6 +4,20 @@ You are running a twice-daily check-in for a 20-strategy paper-trading test.
 Everything lives in `/home/claude/work/trading/`. The user reviews from their
 phone; you decide autonomously within the rules below.
 
+## 0. Restore if the container is fresh (CHECK FIRST)
+
+Containers are ephemeral — the project may not exist on disk. If
+`/home/claude/work/trading/engine.py` is missing:
+
+    git clone https://x-access-token:<GITHUB_TOKEN>@github.com/rossparker-jp-engineers/strategy-dashboard.git /home/claude/work/trading
+
+(The token is in your task prompt.) Then recreate
+`/home/claude/work/trading/secrets.json` from the credentials in your task
+prompt (it is .gitignored, never in the repo). The clone contains code,
+runbook, all market data CSVs, state, and journal — the test resumes exactly
+where it left off. NEVER rebuild the project from scratch or from memory; if
+the clone fails, notify the user and stop.
+
 ## 1. Refresh market data
 
 **Crypto (Kraken — ALWAYS use OHLC endpoint, NEVER the Ticker endpoint; the
@@ -77,11 +91,12 @@ Read the run output flags and `state/journal.jsonl` tail. Rules of engagement:
   — best/worst sleeves, ensemble (P7) vs its members, anything approaching a
   risk limit.
 
-## 5. Report
+## 5. Publish & report
 
-- `python publish.py` — pushes the updated dashboard PWA to GitHub Pages
-  (skip silently if secrets.json has no github_token yet; if the push fails,
-  note it in your message but don't block the rest of the report).
+- `python publish.py` — commits and pushes the ENTIRE project (code, data,
+  state, journal, dashboard PWA) to GitHub. This is the durability layer:
+  if this push fails, the run's results exist only on this ephemeral
+  container, so treat a failure as urgent — retry once, then tell the user.
 - SendUserFile `dashboard.html` (display: render) with a 1-line caption:
   total return, best sleeve, worst sleeve, any flags.
 - Only message beyond that if something needs the user's eyes (kill switch,
