@@ -25,6 +25,7 @@ def api(path, method="GET", payload=None):
                                  data=json.dumps(payload).encode() if payload else None)
     req.add_header("Authorization", f"Bearer {TOKEN}")
     req.add_header("Accept", "application/vnd.github+json")
+    req.add_header("Content-Type", "application/json")
     req.add_header("User-Agent", "strategy-dashboard")
     try:
         with urllib.request.urlopen(req) as r:
@@ -81,6 +82,4 @@ def push():
 
 
 if __name__ == "__main__":
-    ensure_repo()
-    push()
-    ensure_pages()
+    push()  # repo exists; Pages is enabled manually once (proxy blocks those APIs)
