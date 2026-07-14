@@ -87,7 +87,13 @@ Read the run output flags and `state/journal.jsonl` tail. Rules of engagement:
 - **Broken behavior** (strategy error flags, absurd turnover, data staleness)
   may be fixed in code — that's infrastructure repair, not parameter tuning.
   Journal what you changed and why.
-- Weekly (Monday evening run): write a short comparative review in the journal
+- **Record every strategic decision and review in the journal** so it appears
+  in the user's PWA check-in history:
+      python engine.py note decision "Kept S4 frozen: churn came from a data gap, not the signal"
+      python engine.py note review "Weekly review: ..."
+  Anything you decide (re-enabling a sleeve, keeping one frozen, diagnosing a
+  flag, notable observations) gets a `decision` note. Do this BEFORE publish.
+- Weekly (Monday evening run): write the comparative review as a `review` note
   — best/worst sleeves, ensemble (P7) vs its members, anything approaching a
   risk limit.
 

@@ -161,3 +161,9 @@ if __name__ == "__main__":
         print(json.dumps(run(dry="--dry" in sys.argv), indent=2))
     elif cmd == "status":
         status()
+    elif cmd == "note":
+        # strategic decision / review by the check-in session, shown in the PWA:
+        #   python engine.py note review "Weekly review: ..."
+        #   python engine.py note decision "Re-enabled S4 after 5 days flat because ..."
+        journal({"type": "note", "kind": sys.argv[2], "text": sys.argv[3]})
+        print("noted")

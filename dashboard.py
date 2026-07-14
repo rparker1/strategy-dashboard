@@ -149,19 +149,19 @@ def build(state, prices, flags):
     n = len(CFG["sleeves"])
     now = dt.datetime.now(dt.timezone.utc)
 
-    # account curve from journal run entries
-    curve = []
+    # journal: account curve + full event history
+    curve, events = [], []
     jp = os.path.join(HERE, "state", "journal.jsonl")
-    runs = []
     if os.path.exists(jp):
         for ln in open(jp):
             try:
                 j = json.loads(ln)
             except ValueError:
                 continue
+            events.append(j)
             if j.get("type") == "run" and not j.get("dry"):
-                runs.append(j)
                 curve.append((dt.datetime.fromisoformat(j["ts"]).replace(tzinfo=None), j["total_equity"]))
+    runs = [j for j in events if j.get("type") == "run" and not j.get("dry")]
 
     # sleeve stats
     stats = {}
@@ -230,18 +230,34 @@ def build(state, prices, flags):
 {pos_html}
 </div></details>''')
 
-    # activity feed: last 3 runs' decisions
-    feed = []
-    for j in reversed(runs[-6:]):
-        ts = j["ts"][:16].replace("T", " ") + "Z"
-        items = []
-        for d in j.get("decisions", [])[:60]:
-            verb = "bought" if d["notional"] > 0 else "sold"
-            items.append(f'<div class="act"><b>{d["sleeve"]}</b> {verb} {esc(d["symbol"].replace("/USD",""))} {money(abs(d["notional"]))} <span class="sub">→ target {d["target_w"]*100:.0f}% · fee ${d["fee"]:.2f}</span></div>')
-        if not items:
-            items = ['<div class="act sub">No trades — all sleeves already at target.</div>']
-        fl = "".join(f'<div class="flag">{esc(f)}</div>' for f in j.get("flags", []))
-        feed.append(f'<div class="run"><div class="sub" style="margin:8px 0 4px">{ts} · equity {money(j["total_equity"])}</div>{fl}{"".join(items)}</div>')
+    # full check-in history: every journaled event, newest first.
+    # Last 60 runs are expandable with full decisions; older runs get one summary line.
+    feed, run_count = [], 0
+    for j in reversed(events):
+        ts = j.get("ts", "")[:16].replace("T", " ") + "Z"
+        typ = j.get("type")
+        if typ == "note":
+            kind = j.get("kind", "note")
+            icon = "📋" if kind == "review" else "🧭"
+            feed.append(f'<div class="note"><div class="sub">{ts} · {esc(kind)}</div>{icon} {esc(j.get("text",""))}</div>')
+        elif typ == "error":
+            feed.append(f'<div class="flag">{ts} · {esc(j.get("msg",""))}</div>')
+        elif typ == "run":
+            run_count += 1
+            dry = " · DRY" if j.get("dry") else ""
+            nd = len(j.get("decisions", []))
+            head = (f'{ts}{dry} · equity <b>{money(j.get("total_equity",0))}</b> · '
+                    f'{nd} fill{"s" if nd != 1 else ""} · dd {j.get("account_dd",0)*100:.1f}%')
+            fl = "".join(f'<div class="flag">{esc(f)}</div>' for f in j.get("flags", []))
+            if run_count > 60:
+                feed.append(f'<div class="act sub">{head}</div>{fl}')
+                continue
+            items = []
+            for d in j.get("decisions", []):
+                verb = "bought" if d["notional"] > 0 else "sold"
+                items.append(f'<div class="act"><b>{d["sleeve"]}</b> {verb} {esc(d["symbol"].replace("/USD",""))} {money(abs(d["notional"]))} <span class="sub">→ target {d["target_w"]*100:.0f}% · fee ${d["fee"]:.2f}</span></div>')
+            body = "".join(items) or '<div class="act sub">No trades — every sleeve already at target (holding is a decision too).</div>'
+            feed.append(f'<details class="runcard"><summary class="act" style="cursor:pointer">{head}</summary>{fl}<div style="padding-left:8px">{body}</div></details>')
 
     html = f'''<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -283,6 +299,9 @@ h1{{font-size:1.05rem;margin:18px 0 6px;color:#c3c2b7;font-weight:600;letter-spa
 .num{{text-align:right;font-variant-numeric:tabular-nums}}
 .short{{background:#3a2530;color:#e66767;font-size:.65rem;padding:1px 5px;border-radius:4px;font-weight:700}}
 .act{{font-size:.82rem;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05)}}
+.runcard summary{{list-style:none}} .runcard summary::-webkit-details-marker{{display:none}}
+.runcard summary::before{{content:"▸ ";color:#898781}} .runcard[open] summary::before{{content:"▾ "}}
+.note{{background:#1d2333;border-left:3px solid #3987e5;padding:9px 10px;margin:8px 0;border-radius:6px;font-size:.85rem}}
 .doc p{{font-size:.85rem;color:#c3c2b7;line-height:1.5}}
 .doc b{{color:#e8eaed}}
 footer{{margin:22px 0 10px;color:#898781;font-size:.72rem;line-height:1.5}}
@@ -305,8 +324,10 @@ footer{{margin:22px 0 10px;color:#898781;font-size:.72rem;line-height:1.5}}
 <h1>Strategy sleeves — tap to expand</h1>
 {"".join(cards)}
 
-<h1>Recent activity</h1>
-<div class="panel">{"".join(feed) or '<div class="sub">No runs journaled yet.</div>'}</div>
+<h1>Check-in history — every session, every decision</h1>
+<div class="panel">
+<div class="sub" style="margin-bottom:6px">{len(runs)} check-ins journaled. Tap a session to see its fills. 🧭 = strategic decision by the reviewing agent, 📋 = weekly review.</div>
+{"".join(feed) or '<div class="sub">No runs journaled yet.</div>'}</div>
 
 <h1>How this test works</h1>
 <div class="panel doc">
