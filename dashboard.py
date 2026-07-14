@@ -1,5 +1,13 @@
-"""Generates a phone-friendly, self-contained HTML dashboard from engine state."""
+"""Full-report PWA dashboard: hero equity, account curve, exposure, per-sleeve
+cards (strategy description, positions, sparkline), activity feed, methodology.
+Self-contained HTML + inline SVG, no external libraries. Dark, mobile-first.
+
+Palette per the dataviz reference (dark mode steps): series blue #3987e5,
+long/short diverging blue/red, status colors reserved for flags, text tokens
+for all text (marks carry color, text does not).
+"""
 import datetime as dt
+import html as html_mod
 import json
 import os
 
@@ -7,76 +15,314 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CFG = json.load(open(os.path.join(HERE, "config.json")))
 OUT = os.path.join(HERE, "dashboard.html")
 
-NAMES = {
-    "S1": "SMA 20/50 Trend", "S2": "RSI(2) Reversion", "S3": "Bollinger Reversion",
-    "S4": "Donchian Breakout", "S5": "MACD Momentum", "S6": "90d Momentum",
-    "S7": "Vol-Target Trend", "S8": "Keltner Squeeze", "S9": "3-Down Pullback",
-    "S10": "Buy & Hold (control)", "P1": "X-Sect Momentum Top-2", "P2": "Inverse-Vol Parity",
-    "P3": "Dual Momentum", "P4": "ETH/BTC Rel Value", "P5": "AAPL/MSFT Pairs",
-    "P6": "Crypto-Equity Rotation", "P7": "Ensemble Voter", "P8": "Min-Variance",
-    "P9": "Seasonality Hybrid", "P10": "Regime Switcher",
+SURFACE = "#16171c"
+PAGE = "#0f1115"
+
+META = {  # id: (name, what it does, honest weakness)
+ "S1": ("SMA 20/50 Trend", "Long when the 20-day average crosses above the 50-day; flat on the reverse cross. Classic trend capture on every symbol.", "Whipsaws in ranging markets — death by a thousand cuts in chop."),
+ "S2": ("RSI(2) Reversion", "Buys extreme short-term oversold dips (RSI2<10) but only in uptrends (price above 200-day avg); exits on RSI2>70 or after 5 days.", "Catches falling knives when the regime breaks; the trend filter lags."),
+ "S3": ("Bollinger Reversion", "Buys closes below the lower Bollinger band; exits at the 20-day average. Stop at 2 ATR below entry.", "In strong downtrends price walks the band — the stop does all the risk work."),
+ "S4": ("Donchian Breakout", "Turtle-style: buys 20-day-high breakouts, exits on 10-day lows.", "Low win rate by design; needs a big trend to pay for many small losses."),
+ "S5": ("MACD Momentum", "Long when MACD crosses above its signal line with rising histogram; flat on the down-cross.", "Heavily correlated with S1 — kept to test whether the faster variant adds anything."),
+ "S6": ("90d Momentum", "Long any symbol whose 90-day return is positive; flat otherwise. The most robust effect in the academic literature.", "Very slow — may trade twice in the whole test. Judge positioning, not activity."),
+ "S7": ("Vol-Target Trend", "Same signal as S6, but position size scales down when 20-day volatility exceeds a 10% annualized target.", "A controlled experiment vs S6, not a new signal; sizing is coarse at this scale."),
+ "S8": ("Keltner Squeeze", "Waits for volatility compression (Bollinger inside Keltner), buys the upside break; exits below the 10-day EMA.", "Squeezes resolve both ways; long-only eats the downside breaks as losses."),
+ "S9": ("3-Down Pullback", "Buys 3 consecutive down-closes in an uptrend; exits on the first up-close or after 7 days.", "Similar exposure to S2 — tests whether dumb-simple matches RSI's cleverness."),
+ "S10": ("Buy & Hold (control)", "Equal weight across all 7 symbols, continuously rebalanced. The benchmark every other sleeve must beat.", "None — that's the point. If the clever sleeves can't beat this, that's the finding."),
+ "P1": ("X-Sect Momentum Top-2", "Ranks all 7 symbols by 30-day return, holds the top 2. A 2% hysteresis buffer reduces churn at rank boundaries.", "High turnover when ranks are close; the buffer helps but doesn't eliminate it."),
+ "P2": ("Inverse-Vol Parity", "Weights every symbol by the inverse of its volatility, rebalanced weekly. Crypto gets small weights — deliberately.", "Naive risk balancing; tests whether it beats plain equal weight (S10)."),
+ "P3": ("Dual Momentum", "Each week holds the single best 90-day performer — or 100% cash if even the best is negative.", "Maximum concentration: one asset at a time, lumpy equity curve."),
+ "P4": ("ETH/BTC Rel Value", "Tilts between ETH and BTC when their ratio stretches >1.5 standard deviations from its 60-day mean.", "Long-only tilting (no crypto shorts here) mutes the edge substantially."),
+ "P5": ("AAPL/MSFT Pairs", "Shorts the rich leg and buys the cheap leg when the hedged spread stretches past 2 standard deviations; exits near zero.", "Co-moving megacaps can stay dislocated on idiosyncratic news far longer than the stats suggest."),
+ "P6": ("Crypto-Equity Rotation", "Weekly winner-takes-all between the crypto basket, SPY, and cash, by 30-day return.", "Whipsaw risk at regime turns; one bad rotation can cost a month of edge."),
+ "P7": ("Ensemble Voter", "For each symbol, exposure is proportional to how many of S1–S9's signals are currently long it. Trades the combination of everything.", "If the ensemble can't beat its average member, the 9 signals are the same trade in different clothes — a useful finding either way."),
+ "P8": ("Min-Variance", "Long-only minimum-variance weights from a rolling 60-day covariance matrix, capped at 40% per asset, weekly.", "Covariance from 60 observations on 7 assets is noisy; expect unstable weights."),
+ "P9": ("Seasonality Hybrid", "Long BTC+ETH over weekends; long SPY at the turn of each month. Flat otherwise.", "Calendar effects are the most likely to be arbitraged away — the sleeve most expected to fail, included as a falsifiable test."),
+ "P10": ("Regime Switcher", "Allocates to trend signals (S1/S4/S6) when SPY is above its 200-day average with calm vol; to half-size mean-reversion (S2/S3/S9) otherwise.", "Tests the allocator's real job: matching signal type to regime. Regime flips lag by construction."),
 }
 
 
+def esc(s):
+    return html_mod.escape(str(s))
+
+
+def money(x):
+    return f"${x:,.0f}"
+
+
+def sleeve_equity(sv, prices):
+    return sv["cash"] + sum(q * prices.get(s, 0.0) for s, q in sv["positions"].items())
+
+
+# ---------------- SVG builders ----------------
+
+def spark(vals, w=110, h=30):
+    if len(vals) < 2:
+        return f'<svg width="{w}" height="{h}"><line x1="4" y1="{h/2}" x2="{w-8}" y2="{h/2}" stroke="#383835" stroke-width="2" stroke-linecap="round"/></svg>'
+    lo, hi = min(vals), max(vals)
+    rng = (hi - lo) or 1.0
+    pad = 5
+    pts = []
+    for i, v in enumerate(vals):
+        x = pad + i * (w - 2 * pad - 6) / (len(vals) - 1)
+        y = pad + (1 - (v - lo) / rng) * (h - 2 * pad)
+        pts.append((x, y))
+    path = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+    ex, ey = pts[-1]
+    return (f'<svg width="{w}" height="{h}" aria-hidden="true">'
+            f'<polyline points="{path}" fill="none" stroke="#898781" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
+            f'<circle cx="{ex:.1f}" cy="{ey:.1f}" r="4" fill="#3987e5" stroke="{SURFACE}" stroke-width="2"/></svg>')
+
+
+def equity_chart(points, w=720, h=220):
+    """points: [(datetime, equity)] account curve. Single series: no legend."""
+    if len(points) < 2:
+        return '<div class="sub" style="padding:12px 0">Equity curve appears after a few more check-ins.</div>'
+    xs = [p[0].timestamp() for p in points]
+    ys = [p[1] for p in points]
+    x0, x1 = min(xs), max(xs)
+    lo, hi = min(ys), max(ys)
+    span = (hi - lo) or 1.0
+    lo -= span * 0.15
+    hi += span * 0.15
+    padl, padr, padt, padb = 62, 14, 12, 26
+    tick = (lambda v: f"${v:,.0f}") if (hi - lo) < 3000 else (lambda v: f"${v/1000:,.1f}k")
+    iw, ih = w - padl - padr, h - padt - padb
+
+    def X(t):
+        return padl + (t - x0) / ((x1 - x0) or 1) * iw
+
+    def Y(v):
+        return padt + (1 - (v - lo) / (hi - lo)) * ih
+
+    pts = [(X(t), Y(v)) for t, v in zip(xs, ys)]
+    line = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+    area = f"M {pts[0][0]:.1f},{Y(lo):.1f} L " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in pts) + f" L {pts[-1][0]:.1f},{Y(lo):.1f} Z"
+    # 3 clean horizontal gridlines
+    grid, ticks = [], []
+    for frac in (0.0, 0.5, 1.0):
+        v = lo + (hi - lo) * frac
+        y = Y(v)
+        grid.append(f'<line x1="{padl}" y1="{y:.1f}" x2="{w-padr}" y2="{y:.1f}" stroke="#2c2c2a" stroke-width="1"/>')
+        ticks.append(f'<text x="{padl-6}" y="{y+3.5:.1f}" text-anchor="end" font-size="10" fill="#898781" font-variant-numeric="tabular-nums">{tick(v)}</text>')
+    # x labels: first + last date
+    d0 = dt.datetime.fromtimestamp(x0).strftime("%d %b")
+    d1 = dt.datetime.fromtimestamp(x1).strftime("%d %b %H:%M")
+    ex, ey = pts[-1]
+    last_lbl = f"${ys[-1]:,.0f}"
+    hover_dots = "".join(
+        f'<circle cx="{x:.1f}" cy="{y:.1f}" r="7" fill="transparent">'
+        f'<title>{dt.datetime.fromtimestamp(t).strftime("%d %b %H:%M")} — ${v:,.2f}</title></circle>'
+        for (x, y), t, v in zip(pts, xs, ys))
+    return (f'<svg viewBox="0 0 {w} {h}" style="width:100%;height:auto" role="img" aria-label="Account equity over time">'
+            + "".join(grid) + "".join(ticks)
+            + f'<path d="{area}" fill="#3987e5" opacity="0.10"/>'
+            + f'<polyline points="{line}" fill="none" stroke="#3987e5" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
+            + f'<circle cx="{ex:.1f}" cy="{ey:.1f}" r="4" fill="#3987e5" stroke="{SURFACE}" stroke-width="2"/>'
+            + f'<text x="{min(ex, w-padr-4):.1f}" y="{max(ey-10, 12):.1f}" text-anchor="end" font-size="11" fill="#e8eaed" font-weight="600">{last_lbl}</text>'
+            + f'<text x="{padl}" y="{h-8}" font-size="10" fill="#898781">{d0}</text>'
+            + f'<text x="{w-padr}" y="{h-8}" text-anchor="end" font-size="10" fill="#898781">{d1}</text>'
+            + hover_dots + '</svg>')
+
+
+def exposure_bars(exposure, total):
+    """Horizontal diverging bars: net $ exposure per symbol (blue long / red short)."""
+    if not exposure:
+        return '<div class="sub">No open positions.</div>'
+    mx = max(abs(v) for v in exposure.values()) or 1.0
+    rows = []
+    for sym, v in sorted(exposure.items(), key=lambda kv: -abs(kv[1])):
+        wpct = abs(v) / mx * 100
+        color = "#3987e5" if v >= 0 else "#e66767"
+        pct = v / total * 100
+        rows.append(
+            f'<div class="exprow"><div class="explbl">{esc(sym.replace("/USD",""))}</div>'
+            f'<div class="exptrack"><div class="expbar" style="width:{wpct:.1f}%;background:{color}">'
+            f'</div></div><div class="expval">{money(v)} <span class="sub">{pct:+.1f}%</span></div></div>')
+    return "".join(rows)
+
+
+# ---------------- report assembly ----------------
+
 def build(state, prices, flags):
     cap = CFG["sleeve_capital"]
-    rows, total = [], 0.0
+    n = len(CFG["sleeves"])
+    now = dt.datetime.now(dt.timezone.utc)
+
+    # account curve from journal run entries
+    curve = []
+    jp = os.path.join(HERE, "state", "journal.jsonl")
+    runs = []
+    if os.path.exists(jp):
+        for ln in open(jp):
+            try:
+                j = json.loads(ln)
+            except ValueError:
+                continue
+            if j.get("type") == "run" and not j.get("dry"):
+                runs.append(j)
+                curve.append((dt.datetime.fromisoformat(j["ts"]).replace(tzinfo=None), j["total_equity"]))
+
+    # sleeve stats
+    stats = {}
+    total, total_cash = 0.0, 0.0
+    exposure = {}
     for sid in CFG["sleeves"]:
         sv = state["sleeves"][sid]
-        eq = sv["cash"] + sum(q * prices.get(s, 0) for s, q in sv["positions"].items())
+        eq = sleeve_equity(sv, prices)
         total += eq
-        ret = eq / cap - 1
-        dd = 1 - eq / max(sv["peak"], 1e-9)
-        pos = ", ".join(f"{s.replace('/USD','')}{'−' if q<0 else ''}" for s, q in
-                        sorted(sv["positions"].items(), key=lambda kv: -abs(kv[1] * prices.get(kv[0], 0))))
-        status = "⚠️ FLAT" if sv["flattened"] else ("—" if not sv["positions"] else pos)
-        cls = "pos" if ret >= 0 else "neg"
-        rows.append(f"<tr><td><b>{sid}</b><br><span class='sub'>{NAMES[sid]}</span></td>"
-                    f"<td class='{cls}'>{ret:+.2%}<br><span class='sub'>${eq:,.0f}</span></td>"
-                    f"<td>{dd:.1%}</td><td class='sub'>{status}</td></tr>")
-    tret = total / (cap * len(CFG["sleeves"])) - 1
-    flag_html = "".join(f"<div class='flag'>{f}</div>" for f in flags) or \
-                "<div class='ok'>No flags — all sleeves within risk limits.</div>"
-    # recent journal
-    recent = []
-    jp = os.path.join(HERE, "state", "journal.jsonl")
-    if os.path.exists(jp):
-        lines = open(jp).read().strip().splitlines()[-3:]
-        for ln in reversed(lines):
-            j = json.loads(ln)
-            if j.get("type") == "run":
-                fees = sum(d.get("fee", 0) for d in j.get("decisions", []))
-                recent.append(f"<div class='sub'>{j['ts'][:16]}Z · {len(j.get('decisions', []))} fills, "
-                              f"${fees:.2f} fees{' · DRY' if j.get('dry') else ''}</div>")
-    html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+        total_cash += sv["cash"]
+        for s, q in sv["positions"].items():
+            exposure[s] = exposure.get(s, 0.0) + q * prices.get(s, 0.0)
+        stats[sid] = {"eq": eq, "ret": eq / cap - 1, "dd": 1 - eq / max(sv["peak"], 1e-9),
+                      "hist": [pt[1] for pt in sv["history"]][-40:], "sv": sv}
+    tret = total / (cap * n) - 1
+    curve.append((now.replace(tzinfo=None), round(total, 2)))
+    gross = sum(abs(v) for v in exposure.values())
+    best = max(stats, key=lambda k: stats[k]["ret"])
+    worst = min(stats, key=lambda k: stats[k]["ret"])
+    fees = state.get("fees_paid", 0.0)
+    acct_dd = 1 - total / max(state.get("account_peak", total), 1e-9)
+
+    up = "#0ca30c" if tret >= 0 else "#d03b3b"
+
+    # flags / status banner
+    if state.get("killed"):
+        banner = '<div class="flag">🛑 ACCOUNT KILL SWITCH ACTIVE — everything flat, awaiting review.</div>'
+    elif flags:
+        banner = "".join(f'<div class="flag">⚠️ {esc(f)}</div>' for f in flags)
+    else:
+        banner = '<div class="ok">✓ All sleeves within risk limits. No flags.</div>'
+
+    # KPI row
+    kpis = "".join(f'<div class="kpi"><div class="klabel">{lbl}</div><div class="kval" style="{style}">{val}</div><div class="sub">{sub}</div></div>' for lbl, val, sub, style in [
+        ("Best sleeve", f"{best} {stats[best]['ret']:+.2%}", META[best][0], "color:#0ca30c"),
+        ("Worst sleeve", f"{worst} {stats[worst]['ret']:+.2%}", META[worst][0], "color:#d03b3b" if stats[worst]['ret'] < 0 else ""),
+        ("Gross exposure", f"{gross/total*100:.0f}%", f"{money(gross)} deployed", ""),
+        ("Cash", f"{total_cash/total*100:.0f}%", f"{money(total_cash)} idle", ""),
+        ("Fees paid", money(fees), "5bps stocks / 25bps crypto", ""),
+        ("Account drawdown", f"{acct_dd:.1%}", "kill switch at 20%", ""),
+    ])
+
+    # sleeve cards
+    cards = []
+    for sid in CFG["sleeves"]:
+        st = stats[sid]
+        sv = st["sv"]
+        name, what, weak = META[sid]
+        rc = "pos" if st["ret"] >= 0 else "neg"
+        posrows = ""
+        for s, q in sorted(sv["positions"].items(), key=lambda kv: -abs(kv[1] * prices.get(kv[0], 0))):
+            val = q * prices.get(s, 0.0)
+            posrows += (f'<tr><td>{esc(s.replace("/USD",""))}{" <span class=short>SHORT</span>" if q<0 else ""}</td>'
+                        f'<td class="num">{abs(q):,.4g}</td><td class="num">{money(val)}</td>'
+                        f'<td class="num">{val/st["eq"]*100:.0f}%</td></tr>')
+        pos_html = (f'<table class="postable"><tr class="sub"><td>Position</td><td class="num">Qty</td><td class="num">Value</td><td class="num">of sleeve</td></tr>{posrows}</table>'
+                    if posrows else '<div class="sub" style="margin-top:6px">No open positions — the signal is flat, which is a decision too.</div>')
+        flat = ' <span class="short" style="background:#452020">FROZEN 15% DD</span>' if sv["flattened"] else ""
+        cards.append(f'''<details class="card">
+<summary><div class="cardhead"><div><b>{sid}</b> <span class="cname">{esc(name)}</span>{flat}</div>
+<div class="cardright"><span class="{rc}">{st["ret"]:+.2%}</span>{spark(st["hist"])}</div></div></summary>
+<div class="cardbody">
+<p class="what">{esc(what)}</p>
+<p class="weak"><b>Known weakness:</b> {esc(weak)}</p>
+<div class="statline"><span>Equity <b>{money(st["eq"])}</b></span><span>Drawdown <b>{st["dd"]:.1%}</b></span><span>Cash <b>{money(sv["cash"])}</b></span></div>
+{pos_html}
+</div></details>''')
+
+    # activity feed: last 3 runs' decisions
+    feed = []
+    for j in reversed(runs[-6:]):
+        ts = j["ts"][:16].replace("T", " ") + "Z"
+        items = []
+        for d in j.get("decisions", [])[:60]:
+            verb = "bought" if d["notional"] > 0 else "sold"
+            items.append(f'<div class="act"><b>{d["sleeve"]}</b> {verb} {esc(d["symbol"].replace("/USD",""))} {money(abs(d["notional"]))} <span class="sub">→ target {d["target_w"]*100:.0f}% · fee ${d["fee"]:.2f}</span></div>')
+        if not items:
+            items = ['<div class="act sub">No trades — all sleeves already at target.</div>']
+        fl = "".join(f'<div class="flag">{esc(f)}</div>' for f in j.get("flags", []))
+        feed.append(f'<div class="run"><div class="sub" style="margin:8px 0 4px">{ts} · equity {money(j["total_equity"])}</div>{fl}{"".join(items)}</div>')
+
+    html = f'''<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#0f1115">
+<meta name="theme-color" content="{PAGE}">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <script>if('serviceWorker' in navigator){{navigator.serviceWorker.register('sw.js');}}</script>
-<title>Strategy Test Dashboard</title><style>
-body{{font-family:-apple-system,system-ui,sans-serif;margin:0;background:#0f1115;color:#e8eaed;padding:12px}}
-h1{{font-size:1.15rem;margin:4px 0}} .hero{{font-size:1.9rem;font-weight:700;margin:2px 0}}
-.sub{{color:#9aa0a6;font-size:.78rem}} .pos{{color:#4ade80}} .neg{{color:#f87171}}
-table{{width:100%;border-collapse:collapse;margin-top:10px}}
-td{{padding:8px 6px;border-bottom:1px solid #23262d;font-size:.85rem;vertical-align:top}}
-.flag{{background:#452020;border-left:3px solid #f87171;padding:8px;margin:6px 0;border-radius:4px;font-size:.85rem}}
-.ok{{background:#15251a;border-left:3px solid #4ade80;padding:8px;margin:6px 0;border-radius:4px;font-size:.85rem}}
+<title>Strategy Test — Full Report</title><style>
+:root{{color-scheme:dark}}
+body{{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;background:{PAGE};color:#e8eaed;padding:14px;max-width:760px;margin:0 auto}}
+h1{{font-size:1.05rem;margin:18px 0 6px;color:#c3c2b7;font-weight:600;letter-spacing:.02em;text-transform:uppercase;font-size:.8rem}}
+.hero{{font-size:3rem;font-weight:650;line-height:1.05;margin:2px 0}}
+.sub{{color:#898781;font-size:.78rem}} .pos{{color:#0ca30c;font-weight:600}} .neg{{color:#e66767;font-weight:600}}
+.panel{{background:{SURFACE};border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px;margin:10px 0}}
+.flag{{background:#452020;border-left:3px solid #d03b3b;padding:9px 10px;margin:8px 0;border-radius:6px;font-size:.85rem}}
+.ok{{background:#15251a;border-left:3px solid #0ca30c;padding:9px 10px;margin:8px 0;border-radius:6px;font-size:.85rem}}
+.kpis{{display:grid;grid-template-columns:1fr 1fr;gap:8px}}
+.kpi{{background:{SURFACE};border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:10px}}
+.klabel{{color:#898781;font-size:.72rem;margin-bottom:2px}} .kval{{font-size:1.05rem;font-weight:650}}
+.exprow{{display:flex;align-items:center;gap:8px;margin:7px 0}}
+.explbl{{width:44px;font-size:.8rem;font-weight:600}}
+.exptrack{{flex:1;height:14px;position:relative}}
+.expbar{{height:14px;border-radius:0 4px 4px 0;min-width:2px}}
+.expval{{width:120px;text-align:right;font-size:.78rem;font-variant-numeric:tabular-nums}}
+.card{{background:{SURFACE};border:1px solid rgba(255,255,255,.07);border-radius:12px;margin:8px 0;overflow:hidden}}
+.card summary{{list-style:none;cursor:pointer;padding:11px 12px}}
+.card summary::-webkit-details-marker{{display:none}}
+.cardhead{{display:flex;justify-content:space-between;align-items:center;gap:8px}}
+.cname{{color:#c3c2b7;font-size:.85rem}} .cardright{{display:flex;align-items:center;gap:10px}}
+.cardbody{{padding:0 12px 12px;border-top:1px solid rgba(255,255,255,.06)}}
+.what{{font-size:.85rem;color:#e8eaed;margin:10px 0 4px}}
+.weak{{font-size:.78rem;color:#898781;margin:4px 0 8px}}
+.statline{{display:flex;gap:16px;font-size:.78rem;color:#898781;margin:8px 0}}
+.statline b{{color:#e8eaed;font-weight:600}}
+.postable{{width:100%;border-collapse:collapse;margin-top:4px}}
+.postable td{{padding:5px 4px;border-bottom:1px solid rgba(255,255,255,.06);font-size:.82rem}}
+.num{{text-align:right;font-variant-numeric:tabular-nums}}
+.short{{background:#3a2530;color:#e66767;font-size:.65rem;padding:1px 5px;border-radius:4px;font-weight:700}}
+.act{{font-size:.82rem;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05)}}
+.doc p{{font-size:.85rem;color:#c3c2b7;line-height:1.5}}
+.doc b{{color:#e8eaed}}
+footer{{margin:22px 0 10px;color:#898781;font-size:.72rem;line-height:1.5}}
 </style></head><body>
-<h1>Strategy Test — Simulated $100k</h1>
-<div class="hero {'pos' if tret>=0 else 'neg'}">{tret:+.2%}</div>
-<div class="sub">Total ${total:,.0f} across 20 sleeves · updated {dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%d %H:%M')}Z</div>
-{flag_html}
-<table><tr class="sub"><td>Sleeve</td><td>Return</td><td>DD</td><td>Holding</td></tr>
-{''.join(rows)}</table>
-<h1 style="margin-top:14px">Recent runs</h1>{''.join(recent)}
-</body></html>"""
+<div class="sub" style="margin-top:4px">STRATEGY TEST — SIMULATED $100,000 · 20 SLEEVES · 7 SYMBOLS</div>
+<div class="hero" style="color:{up}">{tret:+.2%}</div>
+<div class="sub">{money(total)} total · updated {now.strftime('%a %d %b %Y, %H:%M')} UTC · day {max(1,(now.date()-dt.date(2026,7,13)).days+1)} of ~90</div>
+{banner}
+
+<h1>Account equity</h1>
+<div class="panel">{equity_chart(curve)}</div>
+
+<h1>Vitals</h1>
+<div class="kpis">{kpis}</div>
+
+<h1>Net exposure by symbol</h1>
+<div class="panel">{exposure_bars(exposure, total)}
+<div class="sub" style="margin-top:8px">Blue = net long, red = net short, summed across all 20 sleeves. % is of total account equity.</div></div>
+
+<h1>Strategy sleeves — tap to expand</h1>
+{"".join(cards)}
+
+<h1>Recent activity</h1>
+<div class="panel">{"".join(feed) or '<div class="sub">No runs journaled yet.</div>'}</div>
+
+<h1>How this test works</h1>
+<div class="panel doc">
+<p><b>Setup.</b> $100,000 of simulated money split into twenty $5,000 sleeves. S1–S10 run the same rules independently on each of 7 symbols (SPY, NVDA, AAPL, MSFT, BTC, ETH, SOL); P1–P10 trade the whole universe as a portfolio. Fills happen at live fetched prices <b>minus a fee/slippage haircut</b> (5bps stocks, 25bps crypto) — deliberately harsher than most paper-trading platforms, which fill at perfect prices.</p>
+<p><b>Risk rules (enforced in code).</b> A sleeve losing 15% from its peak is frozen and flagged for review. No sleeve may exceed 1.5× its capital. If the whole account draws down 20%, everything goes flat and stays flat until the human says otherwise.</p>
+<p><b>Judgment discipline.</b> No strategy is declared good or bad before 60 trading days — earlier kills happen only for broken behavior, never for losing. Strategy rules are frozen for the duration: improvement ideas get logged, not applied, because a test whose rules drift measures nothing. The benchmark is S10 (buy &amp; hold): any sleeve that can't beat it after costs has no reason to exist.</p>
+<p><b>What we honestly expect.</b> Over one quarter, most of these 20 will be statistically indistinguishable from noise. The genuinely interesting outputs are the ensemble-vs-members comparison (P7), the regime switcher (P10), and learning which strategy <i>types</i> suit which market regimes.</p>
+<p><b>Operations.</b> Checked twice daily (07:00 & 21:15 UTC) by scheduled runs that refresh data, execute signals, apply risk rules, journal every decision with its reason, and republish this page. Crypto data: Kraken. Stocks: Alpha Vantage (daily bars). The full project — code, data, and this journal — is version-controlled on every run.</p>
+</div>
+
+<footer>Simulated money only — nothing here is investment advice, and paper results overstate live results even with the fee haircut. Data: Kraken (crypto, 24/7), Alpha Vantage (US equities, daily). Page refreshes at every check-in; installed as an app it shows the last snapshot when offline.</footer>
+</body></html>'''
     with open(OUT, "w") as f:
         f.write(html)
     pub = os.path.join(HERE, "docs")
-    if os.path.isdir(pub):  # mirror into the PWA publish dir if it exists
+    if os.path.isdir(pub):
         with open(os.path.join(pub, "index.html"), "w") as f:
             f.write(html)
     return OUT
