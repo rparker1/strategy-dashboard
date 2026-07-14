@@ -6,18 +6,21 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js');}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <title>Strategy Test — Full Report</title><style>
-:root{color-scheme:dark}
-body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;background:#0f1115;color:#e8eaed;padding:14px;max-width:760px;margin:0 auto}
-h1{font-size:1.05rem;margin:18px 0 6px;color:#c3c2b7;font-weight:600;letter-spacing:.02em;text-transform:uppercase;font-size:.8rem}
-.hero{font-size:3rem;font-weight:650;line-height:1.05;margin:2px 0}
+:root{color-scheme:dark;--disp:'Space Grotesk',system-ui,sans-serif;--body:'Inter',system-ui,-apple-system,sans-serif}
+body{font-family:var(--body);margin:0;background:#0f1115;color:#e8eaed;padding:14px;max-width:760px;margin:0 auto}
+h1{font-family:var(--disp);font-size:1.05rem;margin:18px 0 6px;color:#c3c2b7;font-weight:600;letter-spacing:.06em;text-transform:uppercase;font-size:.78rem}
+.hero{font-family:var(--disp);font-size:3.1rem;font-weight:700;line-height:1.05;margin:2px 0;letter-spacing:-.01em}
 .sub{color:#898781;font-size:.78rem} .pos{color:#0ca30c;font-weight:600} .neg{color:#e66767;font-weight:600}
 .panel{background:#16171c;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px;margin:10px 0}
 .flag{background:#452020;border-left:3px solid #d03b3b;padding:9px 10px;margin:8px 0;border-radius:6px;font-size:.85rem}
 .ok{background:#15251a;border-left:3px solid #0ca30c;padding:9px 10px;margin:8px 0;border-radius:6px;font-size:.85rem}
 .kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .kpi{background:#16171c;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:10px}
-.klabel{color:#898781;font-size:.72rem;margin-bottom:2px} .kval{font-size:1.05rem;font-weight:650}
+.klabel{color:#898781;font-size:.72rem;margin-bottom:2px} .kval{font-family:var(--disp);font-size:1.08rem;font-weight:600}
 .exprow{display:flex;align-items:center;gap:8px;margin:7px 0}
 .explbl{width:44px;font-size:.8rem;font-weight:600}
 .exptrack{flex:1;height:14px;position:relative}
@@ -55,16 +58,16 @@ nav.tabs a.active{color:#3987e5;font-weight:600}
 footer{margin:22px 0 10px;color:#898781;font-size:.72rem;line-height:1.5}
 body{padding-bottom:76px}
 </style></head><body>
-<div class="topbar"><span style="font-weight:650">Strategy Test</span>
-<span class="pos" style="font-size:.95rem">+0.14% · $100,145</span></div>
+<div class="topbar"><span style="font-family:var(--disp);font-weight:700;letter-spacing:.01em">Strategy Test</span>
+<span class="pos" style="font-family:var(--disp);font-size:.95rem">+0.14% · $100,145</span></div>
 
 <section class="tab" id="overview">
 <div class="sub" style="margin-top:10px">SIMULATED $100,000 · 20 SLEEVES · 7 SYMBOLS</div>
 <div class="hero" style="color:#0ca30c">+0.14%</div>
-<div class="sub">$100,145 total · updated Tue 14 Jul 2026, 09:06 UTC · day 2 of ~90</div>
+<div class="sub">$100,145 total · updated Tue 14 Jul 2026, 20:23 UTC · day 2 of ~90</div>
 <div class="ok">All sleeves within risk limits. No flags.</div>
 <h1>Account equity</h1>
-<div class="panel"><svg viewBox="0 0 720 220" style="width:100%;height:auto" role="img" aria-label="Account equity over time"><line x1="62" y1="194.0" x2="706" y2="194.0" stroke="#2c2c2a" stroke-width="1"/><line x1="62" y1="103.0" x2="706" y2="103.0" stroke="#2c2c2a" stroke-width="1"/><line x1="62" y1="12.0" x2="706" y2="12.0" stroke="#2c2c2a" stroke-width="1"/><text x="56" y="197.5" text-anchor="end" font-size="10" fill="#898781" font-variant-numeric="tabular-nums">$99,978</text><text x="56" y="106.5" text-anchor="end" font-size="10" fill="#898781" font-variant-numeric="tabular-nums">$100,072</text><text x="56" y="15.5" text-anchor="end" font-size="10" fill="#898781" font-variant-numeric="tabular-nums">$100,166</text><path d="M 62.0,194.0 L 62.0,173.0 L 665.9,64.7 L 702.8,33.0 L 704.8,33.0 L 706.0,33.0 L 706.0,194.0 Z" fill="#3987e5" opacity="0.10"/><polyline points="62.0,173.0 665.9,64.7 702.8,33.0 704.8,33.0 706.0,33.0" fill="none" stroke="#3987e5" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="706.0" cy="33.0" r="4" fill="#3987e5" stroke="#16171c" stroke-width="2"/><text x="702.0" y="23.0" text-anchor="end" font-size="11" fill="#e8eaed" font-weight="600">$100,145</text><text x="62" y="212" font-size="10" fill="#898781">13 Jul</text><text x="706" y="212" text-anchor="end" font-size="10" fill="#898781">14 Jul 09:06</text><circle cx="62.0" cy="173.0" r="7" fill="transparent"><title>13 Jul 22:44 — $100,000.00</title></circle><circle cx="665.9" cy="64.7" r="7" fill="transparent"><title>14 Jul 08:28 — $100,111.99</title></circle><circle cx="702.8" cy="33.0" r="7" fill="transparent"><title>14 Jul 09:03 — $100,144.71</title></circle><circle cx="704.8" cy="33.0" r="7" fill="transparent"><title>14 Jul 09:05 — $100,144.70</title></circle><circle cx="706.0" cy="33.0" r="7" fill="transparent"><title>14 Jul 09:06 — $100,144.70</title></circle></svg></div>
+<div class="panel"><svg viewBox="0 0 720 220" style="width:100%;height:auto" role="img" aria-label="Account equity over time"><line x1="62" y1="194.0" x2="706" y2="194.0" stroke="#2c2c2a" stroke-width="1"/><line x1="62" y1="103.0" x2="706" y2="103.0" stroke="#2c2c2a" stroke-width="1"/><line x1="62" y1="12.0" x2="706" y2="12.0" stroke="#2c2c2a" stroke-width="1"/><text x="56" y="197.5" text-anchor="end" font-size="10" fill="#898781" font-variant-numeric="tabular-nums">$99,978</text><text x="56" y="106.5" text-anchor="end" font-size="10" fill="#898781" font-variant-numeric="tabular-nums">$100,072</text><text x="56" y="15.5" text-anchor="end" font-size="10" fill="#898781" font-variant-numeric="tabular-nums">$100,166</text><path d="M 62.0,194.0 L 62.0,173.0 L 351.3,64.7 L 369.0,33.0 L 370.0,33.0 L 706.0,33.0 L 706.0,194.0 Z" fill="#3987e5" opacity="0.10"/><polyline points="62.0,173.0 351.3,64.7 369.0,33.0 370.0,33.0 706.0,33.0" fill="none" stroke="#3987e5" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="706.0" cy="33.0" r="4" fill="#3987e5" stroke="#16171c" stroke-width="2"/><text x="702.0" y="23.0" text-anchor="end" font-size="11" fill="#e8eaed" font-weight="600">$100,145</text><text x="62" y="212" font-size="10" fill="#898781">13 Jul</text><text x="706" y="212" text-anchor="end" font-size="10" fill="#898781">14 Jul 20:23</text><circle cx="62.0" cy="173.0" r="7" fill="transparent"><title>13 Jul 22:44 — $100,000.00</title></circle><circle cx="351.3" cy="64.7" r="7" fill="transparent"><title>14 Jul 08:28 — $100,111.99</title></circle><circle cx="369.0" cy="33.0" r="7" fill="transparent"><title>14 Jul 09:03 — $100,144.71</title></circle><circle cx="370.0" cy="33.0" r="7" fill="transparent"><title>14 Jul 09:05 — $100,144.70</title></circle><circle cx="706.0" cy="33.0" r="7" fill="transparent"><title>14 Jul 20:23 — $100,144.70</title></circle></svg></div>
 <h1>Vitals</h1>
 <div class="kpis"><div class="kpi"><div class="klabel">Best sleeve</div><div class="kval" style="color:#0ca30c">P1 +0.77%</div><div class="sub">X-Sect Momentum Top-2</div></div><div class="kpi"><div class="klabel">Worst sleeve</div><div class="kval" style="color:#d03b3b">P3 -0.05%</div><div class="sub">Dual Momentum</div></div><div class="kpi"><div class="klabel">Gross exposure</div><div class="kval" style="">43%</div><div class="sub">$43,029 deployed</div></div><div class="kpi"><div class="klabel">Cash</div><div class="kval" style="">57%</div><div class="sub">$57,116 idle</div></div><div class="kpi"><div class="klabel">Fees paid</div><div class="kval" style="">$66</div><div class="sub">5bps stocks / 25bps crypto</div></div><div class="kpi"><div class="klabel">Account drawdown</div><div class="kval" style="">0.0%</div><div class="sub">kill switch at 20%</div></div></div>
 <h1>Net exposure by symbol</h1>

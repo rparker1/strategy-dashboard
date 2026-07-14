@@ -268,18 +268,21 @@ def build(state, prices, flags):
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <script>if('serviceWorker' in navigator){{navigator.serviceWorker.register('sw.js');}}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <title>Strategy Test — Full Report</title><style>
-:root{{color-scheme:dark}}
-body{{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;background:{PAGE};color:#e8eaed;padding:14px;max-width:760px;margin:0 auto}}
-h1{{font-size:1.05rem;margin:18px 0 6px;color:#c3c2b7;font-weight:600;letter-spacing:.02em;text-transform:uppercase;font-size:.8rem}}
-.hero{{font-size:3rem;font-weight:650;line-height:1.05;margin:2px 0}}
+:root{{color-scheme:dark;--disp:'Space Grotesk',system-ui,sans-serif;--body:'Inter',system-ui,-apple-system,sans-serif}}
+body{{font-family:var(--body);margin:0;background:{PAGE};color:#e8eaed;padding:14px;max-width:760px;margin:0 auto}}
+h1{{font-family:var(--disp);font-size:1.05rem;margin:18px 0 6px;color:#c3c2b7;font-weight:600;letter-spacing:.06em;text-transform:uppercase;font-size:.78rem}}
+.hero{{font-family:var(--disp);font-size:3.1rem;font-weight:700;line-height:1.05;margin:2px 0;letter-spacing:-.01em}}
 .sub{{color:#898781;font-size:.78rem}} .pos{{color:#0ca30c;font-weight:600}} .neg{{color:#e66767;font-weight:600}}
 .panel{{background:{SURFACE};border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px;margin:10px 0}}
 .flag{{background:#452020;border-left:3px solid #d03b3b;padding:9px 10px;margin:8px 0;border-radius:6px;font-size:.85rem}}
 .ok{{background:#15251a;border-left:3px solid #0ca30c;padding:9px 10px;margin:8px 0;border-radius:6px;font-size:.85rem}}
 .kpis{{display:grid;grid-template-columns:1fr 1fr;gap:8px}}
 .kpi{{background:{SURFACE};border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:10px}}
-.klabel{{color:#898781;font-size:.72rem;margin-bottom:2px}} .kval{{font-size:1.05rem;font-weight:650}}
+.klabel{{color:#898781;font-size:.72rem;margin-bottom:2px}} .kval{{font-family:var(--disp);font-size:1.08rem;font-weight:600}}
 .exprow{{display:flex;align-items:center;gap:8px;margin:7px 0}}
 .explbl{{width:44px;font-size:.8rem;font-weight:600}}
 .exptrack{{flex:1;height:14px;position:relative}}
@@ -317,8 +320,8 @@ nav.tabs a.active{{color:#3987e5;font-weight:600}}
 footer{{margin:22px 0 10px;color:#898781;font-size:.72rem;line-height:1.5}}
 body{{padding-bottom:76px}}
 </style></head><body>
-<div class="topbar"><span style="font-weight:650">Strategy Test</span>
-<span class="{'pos' if tret>=0 else 'neg'}" style="font-size:.95rem">{tret:+.2%} · {money(total)}</span></div>
+<div class="topbar"><span style="font-family:var(--disp);font-weight:700;letter-spacing:.01em">Strategy Test</span>
+<span class="{'pos' if tret>=0 else 'neg'}" style="font-family:var(--disp);font-size:.95rem">{tret:+.2%} · {money(total)}</span></div>
 
 <section class="tab" id="overview">
 <div class="sub" style="margin-top:10px">SIMULATED $100,000 · 20 SLEEVES · 7 SYMBOLS</div>

@@ -1,6 +1,7 @@
 // Network-first for the dashboard (always fresh when online, cached copy offline);
-// cache-first for static assets.
-const CACHE = "strategy-dash-v1";
+// cache-first for static assets and web fonts (so the installed app renders
+// identically offline).
+const CACHE = "strategy-dash-v2";
 const ASSETS = ["./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {
