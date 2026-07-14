@@ -188,11 +188,11 @@ def build(state, prices, flags):
 
     # flags / status banner
     if state.get("killed"):
-        banner = '<div class="flag">🛑 ACCOUNT KILL SWITCH ACTIVE — everything flat, awaiting review.</div>'
+        banner = '<div class="flag"><b>ACCOUNT KILL SWITCH ACTIVE</b> — everything flat, awaiting review.</div>'
     elif flags:
-        banner = "".join(f'<div class="flag">⚠️ {esc(f)}</div>' for f in flags)
+        banner = "".join(f'<div class="flag">{esc(f)}</div>' for f in flags)
     else:
-        banner = '<div class="ok">✓ All sleeves within risk limits. No flags.</div>'
+        banner = '<div class="ok">All sleeves within risk limits. No flags.</div>'
 
     # KPI row
     kpis = "".join(f'<div class="kpi"><div class="klabel">{lbl}</div><div class="kval" style="{style}">{val}</div><div class="sub">{sub}</div></div>' for lbl, val, sub, style in [
@@ -238,8 +238,9 @@ def build(state, prices, flags):
         typ = j.get("type")
         if typ == "note":
             kind = j.get("kind", "note")
-            icon = "📋" if kind == "review" else "🧭"
-            feed.append(f'<div class="note"><div class="sub">{ts} · {esc(kind)}</div>{icon} {esc(j.get("text",""))}</div>')
+            chip = ('<span class="chip rev">REVIEW</span>' if kind == "review"
+                    else '<span class="chip dec">DECISION</span>')
+            feed.append(f'<div class="note"><div class="sub" style="margin-bottom:3px">{ts}</div>{chip}{esc(j.get("text",""))}</div>')
         elif typ == "error":
             feed.append(f'<div class="flag">{ts} · {esc(j.get("msg",""))}</div>')
         elif typ == "run":
@@ -306,9 +307,10 @@ section.tab{{display:none}} section.tab.active{{display:block;animation:fade .15
 @keyframes fade{{from{{opacity:.4}}to{{opacity:1}}}}
 nav.tabs{{position:fixed;bottom:0;left:0;right:0;display:flex;background:rgba(15,17,21,.92);backdrop-filter:blur(12px);border-top:1px solid rgba(255,255,255,.08);padding-bottom:env(safe-area-inset-bottom);z-index:10}}
 nav.tabs a{{flex:1;text-align:center;padding:9px 0 7px;text-decoration:none;color:#898781;font-size:.66rem;line-height:1.3}}
-nav.tabs a .ico{{display:block;font-size:1.15rem;margin-bottom:1px;filter:grayscale(1) opacity(.6)}}
+nav.tabs a svg{{display:block;margin:0 auto 2px;width:20px;height:20px}}
 nav.tabs a.active{{color:#3987e5;font-weight:600}}
-nav.tabs a.active .ico{{filter:none}}
+.chip{{display:inline-block;font-size:.62rem;font-weight:700;letter-spacing:.06em;padding:2px 7px;border-radius:4px;vertical-align:1px;margin-right:6px}}
+.chip.dec{{background:#1d2a45;color:#6da7ec}} .chip.rev{{background:#2a2438;color:#9085e9}}
 .topbar{{position:sticky;top:0;background:rgba(15,17,21,.92);backdrop-filter:blur(12px);z-index:9;padding:10px 0 8px;margin:0 -14px;padding-left:14px;padding-right:14px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;justify-content:space-between;align-items:baseline}}
 .doc p{{font-size:.85rem;color:#c3c2b7;line-height:1.5}}
 .doc b{{color:#e8eaed}}
@@ -340,7 +342,7 @@ body{{padding-bottom:76px}}
 <section class="tab" id="history">
 <h1 style="margin-top:14px">Check-in history — every session, every decision</h1>
 <div class="panel">
-<div class="sub" style="margin-bottom:6px">{len(runs)} check-ins journaled. Tap a session to see its fills. 🧭 = strategic decision by the reviewing agent, 📋 = weekly review.</div>
+<div class="sub" style="margin-bottom:6px">{len(runs)} check-ins journaled. Tap a session to see its fills. Blue cards are strategic decisions by the reviewing agent; violet cards are weekly reviews.</div>
 {"".join(feed) or '<div class="sub">No runs journaled yet.</div>'}</div>
 </section>
 
@@ -357,10 +359,10 @@ body{{padding-bottom:76px}}
 </section>
 
 <nav class="tabs">
-<a href="#overview" data-tab="overview"><span class="ico">📊</span>Overview</a>
-<a href="#strategies" data-tab="strategies"><span class="ico">🧩</span>Strategies</a>
-<a href="#history" data-tab="history"><span class="ico">🕑</span>History</a>
-<a href="#about" data-tab="about"><span class="ico">ℹ️</span>About</a>
+<a href="#overview" data-tab="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-6 4 3 6-8"/><path d="M3 21h18"/></svg>Overview</a>
+<a href="#strategies" data-tab="strategies"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>Strategies</a>
+<a href="#history" data-tab="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>History</a>
+<a href="#about" data-tab="about"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>About</a>
 </nav>
 <script>
 (function() {{
