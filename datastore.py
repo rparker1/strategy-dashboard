@@ -67,7 +67,7 @@ def ingest_kraken(raw_path, sym):
     pat = re.compile(r'\[(\d{10}),"([\d.]+)","([\d.]+)","([\d.]+)","([\d.]+)",'
                      r'"([\d.]+)","([\d.]+)",(\d+)\]')
     rows = [m.groups() for m in pat.finditer(text)]
-    if len(rows) < 50:
+    if len(rows) < 2:  # need at least 1 completed bar + the partial bar
         raise ValueError(f"only {len(rows)} complete OHLC rows found for {sym}")
     df = pd.DataFrame(rows, columns=["t", "open", "high", "low", "close",
                                      "vwap", "volume", "count"])
