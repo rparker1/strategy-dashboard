@@ -144,6 +144,60 @@ def exposure_bars(exposure, total):
 
 # ---------------- report assembly ----------------
 
+def reconstruct_positions(events, prices):
+    """Replay journal fills into average-cost position episodes.
+    Returns (open_positions, closed_episodes)."""
+    book = {}   # (sleeve, sym) -> {qty, avg, fees, opened, realized}
+    closed = []
+    for j in events:
+        if j.get("type") != "run" or j.get("dry"):
+            continue
+        ts = j.get("ts", "")[:10]
+        for d in j.get("decisions", []):
+            key = (d["sleeve"], d["symbol"])
+            delta = d["delta_qty"]
+            if not delta:
+                continue
+            px = abs(d["notional"] / delta)
+            fee = d.get("fee", 0.0)
+            b = book.get(key)
+            if b is None or abs(b["qty"]) < 1e-9:
+                book[key] = {"qty": delta, "avg": px, "fees": fee, "opened": ts, "realized": 0.0}
+                continue
+            b["fees"] += fee
+            same_dir = (b["qty"] > 0) == (delta > 0)
+            if same_dir:  # scale in: weighted average cost
+                b["avg"] = (b["avg"] * abs(b["qty"]) + px * abs(delta)) / (abs(b["qty"]) + abs(delta))
+                b["qty"] += delta
+            else:
+                close_qty = min(abs(delta), abs(b["qty"]))
+                b["realized"] += (px - b["avg"]) * close_qty * (1 if b["qty"] > 0 else -1)
+                remainder = delta + (close_qty if b["qty"] > 0 else -close_qty)
+                b["qty"] += delta
+                if abs(b["qty"]) * px < 1.0:  # episode fully closed
+                    cost = b["avg"] * close_qty
+                    pnl = b["realized"] - b["fees"]
+                    closed.append({"sleeve": key[0], "symbol": key[1], "opened": b["opened"],
+                                   "closed": ts, "pnl": pnl, "fees": b["fees"],
+                                   "pct": pnl / cost if cost else 0.0,
+                                   "side": "LONG" if delta < 0 else "SHORT"})
+                    del book[key]
+                elif (b["qty"] > 0) != (delta < 0) and abs(remainder) > 1e-9 and (b["qty"] > 0) != (b["qty"] - delta > 0):
+                    # crossed through zero: restart episode on the far side
+                    b["avg"], b["opened"], b["fees"], b["realized"] = px, ts, 0.0, 0.0
+    opens = []
+    for (sleeve, sym), b in book.items():
+        px = prices.get(sym, b["avg"])
+        upnl = (px - b["avg"]) * b["qty"] - b["fees"] + b["realized"]
+        cost = abs(b["qty"]) * b["avg"]
+        opens.append({"sleeve": sleeve, "symbol": sym, "qty": b["qty"], "avg": b["avg"],
+                      "px": px, "pnl": upnl, "pct": upnl / cost if cost else 0.0,
+                      "opened": b["opened"], "side": "LONG" if b["qty"] > 0 else "SHORT"})
+    opens.sort(key=lambda x: -abs(x["qty"] * x["px"]))
+    closed.sort(key=lambda x: x["closed"], reverse=True)
+    return opens, closed
+
+
 def build(state, prices, flags):
     cap = CFG["sleeve_capital"]
     n = len(CFG["sleeves"])
@@ -202,6 +256,43 @@ def build(state, prices, flags):
         ("Cash", f"{total_cash/total*100:.0f}%", f"{money(total_cash)} idle", ""),
         ("Fees paid", money(fees), "5bps stocks / 25bps crypto", ""),
         ("Account drawdown", f"{acct_dd:.1%}", "kill switch at 20%", ""),
+    ])
+
+    # positions ledger
+    opens, closed_eps = reconstruct_positions(events, prices)
+    tot_upnl = sum(p["pnl"] for p in opens)
+    tot_rpnl = sum(c["pnl"] for c in closed_eps)
+
+    def px_fmt(v):
+        return f"${v:,.2f}" if v < 1000 else f"${v:,.0f}"
+
+    def prow(p, is_open):
+        cls = "pos" if p["pnl"] >= 0 else "neg"
+        side_style = "background:#1d2a45;color:#6da7ec" if p["side"] == "LONG" else ""
+        side = f'<span class="short" style="{side_style}">{p["side"]}</span>'
+        name = META[p["sleeve"]][0]
+        if is_open:
+            mid = f'{abs(p["qty"]):,.4g} @ {px_fmt(p["avg"])} → now {px_fmt(p["px"])}'
+            when = f'opened {p["opened"]}'
+        else:
+            mid = f'fees ${p["fees"]:.2f}'
+            when = f'{p["opened"]} → {p["closed"]}'
+        sign = "+" if p["pnl"] >= 0 else "−"
+        return (f'<div class="posrow"><div><b>{esc(p["symbol"].replace("/USD",""))}</b> {side}'
+                f'<div class="sub">{p["sleeve"]} · {esc(name)} · {when}</div>'
+                f'<div class="sub">{mid}</div></div>'
+                f'<div class="posval {cls}">{sign}${abs(p["pnl"]):,.2f}'
+                f'<div class="sub" style="text-align:right">{p["pct"]:+.2%}</div></div></div>')
+
+    open_html = "".join(prow(p, True) for p in opens) or '<div class="sub">No open positions.</div>'
+    closed_html = "".join(prow(c, False) for c in closed_eps[:100]) or \
+                  '<div class="sub">No closed positions yet — every position opened so far is still running.</div>'
+    pos_kpis = "".join(f'<div class="kpi"><div class="klabel">{l}</div><div class="kval {c}">{v}</div></div>'
+                       for l, v, c in [
+        ("Open positions", str(len(opens)), ""),
+        ("Unrealised P/L", f'{"+" if tot_upnl>=0 else "−"}${abs(tot_upnl):,.2f}', "pos" if tot_upnl >= 0 else "neg"),
+        ("Closed positions", str(len(closed_eps)), ""),
+        ("Realised P/L", f'{"+" if tot_rpnl>=0 else "−"}${abs(tot_rpnl):,.2f}', "pos" if tot_rpnl >= 0 else "neg"),
     ])
 
     # sleeve cards
@@ -306,6 +397,9 @@ h1{{font-family:var(--disp);font-size:1.05rem;margin:18px 0 6px;color:#c3c2b7;fo
 .runcard summary{{list-style:none}} .runcard summary::-webkit-details-marker{{display:none}}
 .runcard summary::before{{content:"▸ ";color:#898781}} .runcard[open] summary::before{{content:"▾ "}}
 .note{{background:#1d2333;border-left:3px solid #3987e5;padding:9px 10px;margin:8px 0;border-radius:6px;font-size:.85rem}}
+.posrow{{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06)}}
+.posrow:last-child{{border-bottom:none}}
+.posval{{font-family:var(--disp);font-weight:600;font-size:.95rem;white-space:nowrap;font-variant-numeric:tabular-nums}}
 section.tab{{display:none}} section.tab.active{{display:block;animation:fade .15s ease}}
 @keyframes fade{{from{{opacity:.4}}to{{opacity:1}}}}
 nav.tabs{{position:fixed;bottom:0;left:0;right:0;display:flex;background:rgba(15,17,21,.92);backdrop-filter:blur(12px);border-top:1px solid rgba(255,255,255,.08);padding-bottom:env(safe-area-inset-bottom);z-index:10}}
@@ -337,6 +431,16 @@ body{{padding-bottom:76px}}
 <div class="sub" style="margin-top:8px">Blue = net long, red = net short, summed across all 20 sleeves. % is of total account equity.</div></div>
 </section>
 
+<section class="tab" id="positions">
+<h1 style="margin-top:14px">Position P/L</h1>
+<div class="kpis">{pos_kpis}</div>
+<div class="sub" style="margin:8px 2px">P/L is net of the fee/slippage haircut. The same symbol appears once per strategy that holds it — each sleeve runs its own book. Average-cost basis, reconstructed from the trade journal.</div>
+<h1>Open positions</h1>
+<div class="panel">{open_html}</div>
+<h1>Closed positions</h1>
+<div class="panel">{closed_html}</div>
+</section>
+
 <section class="tab" id="strategies">
 <h1 style="margin-top:14px">Strategy sleeves — tap to expand</h1>
 {"".join(cards)}
@@ -364,13 +468,14 @@ body{{padding-bottom:76px}}
 
 <nav class="tabs">
 <a href="#overview" data-tab="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-6 4 3 6-8"/><path d="M3 21h18"/></svg>Overview</a>
+<a href="#positions" data-tab="positions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13H4z"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M4 13h16"/></svg>Positions</a>
 <a href="#strategies" data-tab="strategies"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>Strategies</a>
 <a href="#history" data-tab="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>History</a>
 <a href="#about" data-tab="about"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>About</a>
 </nav>
 <script>
 (function() {{
-  var tabs = ["overview","strategies","history","about"];
+  var tabs = ["overview","positions","strategies","history","about"];
   function show() {{
     var t = location.hash.replace("#","");
     if (tabs.indexOf(t) < 0) t = "overview";
