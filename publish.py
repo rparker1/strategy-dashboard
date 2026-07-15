@@ -64,6 +64,7 @@ def push():
         sh("git", "init", "-b", "main")
         sh("git", "config", "user.email", "bot@strategy-test.local")
         sh("git", "config", "user.name", "Strategy Test Bot")
+    sh("git", "config", "merge.ours.driver", "true")  # for generated-HTML merges
     remote = f"https://x-access-token:{TOKEN}@github.com/{USER}/{REPO}.git"
     sh("git", "remote", "remove", "origin")
     sh("git", "remote", "add", "origin", remote)
