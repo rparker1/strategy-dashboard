@@ -14,6 +14,7 @@ INCLUDE = [
     "RUNBOOK.md", "config.json",  # secrets.json deliberately EXCLUDED from backups
     "indicators.py", "datastore.py", "strategies.py", "engine.py",
     "dashboard.py", "publish.py", "make_backup.py", "test_offline.py",
+    "backtest.py", "evaluate.py", "EVALUATION.md",
     "docs/manifest.webmanifest", "docs/sw.js",
 ]
 INCLUDE_DIRS = [("data", ".csv"), ("data", ".json"),

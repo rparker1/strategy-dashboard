@@ -9,7 +9,7 @@ phone; you decide autonomously within the rules below.
 Containers are ephemeral — the project may not exist on disk. If
 `/home/claude/work/trading/engine.py` is missing:
 
-    git clone https://x-access-token:<GITHUB_TOKEN>@github.com/rossparker-jp-engineers/strategy-dashboard.git /home/claude/work/trading
+    git clone https://x-access-token:<GITHUB_TOKEN>@github.com/rparker1/strategy-dashboard.git /home/claude/work/trading
 
 (The token is in your task prompt.) Then recreate
 `/home/claude/work/trading/secrets.json` from the credentials in your task
@@ -93,6 +93,10 @@ Read the run output flags and `state/journal.jsonl` tail. Rules of engagement:
       python engine.py note review "Weekly review: ..."
   Anything you decide (re-enabling a sleeve, keeping one frozen, diagnosing a
   flag, notable observations) gets a `decision` note. Do this BEFORE publish.
+- The pre-registered evaluation framework lives in EVALUATION.md /
+  backtest.py / evaluate.py. Its thresholds are FROZEN. You may run
+  `python evaluate.py` for weekly diagnostics, but before 2026-10-12 its
+  output decides nothing — never act on interim rankings.
 - Weekly (Monday evening run): write the comparative review as a `review` note
   — best/worst sleeves, ensemble (P7) vs its members, anything approaching a
   risk limit.
