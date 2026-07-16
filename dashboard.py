@@ -70,8 +70,8 @@ def spark(vals, w=110, h=30):
     path = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
     ex, ey = pts[-1]
     return (f'<svg width="{w}" height="{h}" aria-hidden="true">'
-            f'<polyline points="{path}" fill="none" stroke="#898781" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
-            f'<circle cx="{ex:.1f}" cy="{ey:.1f}" r="4" fill="#3987e5" stroke="{SURFACE}" stroke-width="2"/></svg>')
+            f'<polyline class="spark-draw" pathLength="1" points="{path}" fill="none" stroke="#898781" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
+            f'<circle class="enddot" style="animation-delay:.6s" cx="{ex:.1f}" cy="{ey:.1f}" r="4" fill="#3987e5" stroke="{SURFACE}" stroke-width="2"/></svg>')
 
 
 def equity_chart(points, w=720, h=220):
@@ -116,10 +116,11 @@ def equity_chart(points, w=720, h=220):
         for (x, y), t, v in zip(pts, xs, ys))
     return (f'<svg viewBox="0 0 {w} {h}" style="width:100%;height:auto" role="img" aria-label="Account equity over time">'
             + "".join(grid) + "".join(ticks)
-            + f'<path d="{area}" fill="#3987e5" opacity="0.10"/>'
-            + f'<polyline points="{line}" fill="none" stroke="#3987e5" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
-            + f'<circle cx="{ex:.1f}" cy="{ey:.1f}" r="4" fill="#3987e5" stroke="{SURFACE}" stroke-width="2"/>'
-            + f'<text x="{min(ex, w-padr-4):.1f}" y="{max(ey-10, 12):.1f}" text-anchor="end" font-size="11" fill="#e8eaed" font-weight="600">{last_lbl}</text>'
+            + f'<path class="wash" d="{area}" fill="#3987e5" opacity="0"/>'
+            + f'<polyline class="draw" pathLength="1" points="{line}" fill="none" stroke="#3987e5" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
+            + f'<circle class="pulsering" cx="{ex:.1f}" cy="{ey:.1f}" r="4" fill="none" stroke="#3987e5" stroke-width="1.5"/>'
+            + f'<circle class="enddot" cx="{ex:.1f}" cy="{ey:.1f}" r="4" fill="#3987e5" stroke="{SURFACE}" stroke-width="2"/>'
+            + f'<text class="enddot" x="{min(ex, w-padr-4):.1f}" y="{max(ey-10, 12):.1f}" text-anchor="end" font-size="11" fill="#e8eaed" font-weight="600">{last_lbl}</text>'
             + f'<text x="{padl}" y="{h-8}" font-size="10" fill="#898781">{d0}</text>'
             + f'<text x="{w-padr}" y="{h-8}" text-anchor="end" font-size="10" fill="#898781">{d1}</text>'
             + hover_dots + '</svg>')
@@ -136,8 +137,8 @@ def exposure_bars(exposure, total):
         color = "#3987e5" if v >= 0 else "#e66767"
         pct = v / total * 100
         rows.append(
-            f'<div class="exprow"><div class="explbl">{esc(sym.replace("/USD",""))}</div>'
-            f'<div class="exptrack"><div class="expbar" style="width:{wpct:.1f}%;background:{color}">'
+            f'<div class="exprow stag" style="--i:{len(rows)}"><div class="explbl">{esc(sym.replace("/USD",""))}</div>'
+            f'<div class="exptrack"><div class="expbar" style="--tw:{wpct:.1f}%;background:{color}">'
             f'</div></div><div class="expval">{money(v)} <span class="sub">{pct:+.1f}%</span></div></div>')
     return "".join(rows)
 
@@ -252,10 +253,10 @@ def build(state, prices, flags):
     kpis = "".join(f'<div class="kpi"><div class="klabel">{lbl}</div><div class="kval" style="{style}">{val}</div><div class="sub">{sub}</div></div>' for lbl, val, sub, style in [
         ("Best sleeve", f"{best} {stats[best]['ret']:+.2%}", META[best][0], "color:#0ca30c"),
         ("Worst sleeve", f"{worst} {stats[worst]['ret']:+.2%}", META[worst][0], "color:#d03b3b" if stats[worst]['ret'] < 0 else ""),
-        ("Gross exposure", f"{gross/total*100:.0f}%", f"{money(gross)} deployed", ""),
-        ("Cash", f"{total_cash/total*100:.0f}%", f"{money(total_cash)} idle", ""),
-        ("Fees paid", money(fees), "5bps stocks / 25bps crypto", ""),
-        ("Account drawdown", f"{acct_dd:.1%}", "kill switch at 20%", ""),
+        ("Gross exposure", f'<span class="anim-num" data-val="{gross/total*100}" data-fmt="pct0" data-final="{gross/total*100:.0f}%">{gross/total*100:.0f}%</span>', f"{money(gross)} deployed", ""),
+        ("Cash", f'<span class="anim-num" data-val="{total_cash/total*100}" data-fmt="pct0" data-final="{total_cash/total*100:.0f}%">{total_cash/total*100:.0f}%</span>', f"{money(total_cash)} idle", ""),
+        ("Fees paid", f'<span class="anim-num" data-val="{fees}" data-fmt="usd0" data-final="{money(fees)}">{money(fees)}</span>', "5bps stocks / 25bps crypto", ""),
+        ("Account drawdown", f'<span class="anim-num" data-val="{acct_dd*100}" data-fmt="pct1" data-final="{acct_dd:.1%}">{acct_dd:.1%}</span>', "kill switch at 20%", ""),
     ])
 
     # positions ledger
@@ -278,21 +279,23 @@ def build(state, prices, flags):
             mid = f'fees ${p["fees"]:.2f}'
             when = f'{p["opened"]} → {p["closed"]}'
         sign = "+" if p["pnl"] >= 0 else "−"
-        return (f'<div class="posrow"><div><b>{esc(p["symbol"].replace("/USD",""))}</b> {side}'
+        return (f'<div class="posrow stag" style="--i:{min(p.get("_i",0),14)}"><div><b>{esc(p["symbol"].replace("/USD",""))}</b> {side}'
                 f'<div class="sub">{p["sleeve"]} · {esc(name)} · {when}</div>'
                 f'<div class="sub">{mid}</div></div>'
                 f'<div class="posval {cls}">{sign}${abs(p["pnl"]):,.2f}'
                 f'<div class="sub" style="text-align:right">{p["pct"]:+.2%}</div></div></div>')
 
+    for _i, _p in enumerate(opens): _p["_i"] = _i
+    for _i, _p in enumerate(closed_eps): _p["_i"] = _i
     open_html = "".join(prow(p, True) for p in opens) or '<div class="sub">No open positions.</div>'
     closed_html = "".join(prow(c, False) for c in closed_eps[:100]) or \
                   '<div class="sub">No closed positions yet — every position opened so far is still running.</div>'
     pos_kpis = "".join(f'<div class="kpi"><div class="klabel">{l}</div><div class="kval {c}">{v}</div></div>'
                        for l, v, c in [
-        ("Open positions", str(len(opens)), ""),
-        ("Unrealised P/L", f'{"+" if tot_upnl>=0 else "−"}${abs(tot_upnl):,.2f}', "pos" if tot_upnl >= 0 else "neg"),
-        ("Closed positions", str(len(closed_eps)), ""),
-        ("Realised P/L", f'{"+" if tot_rpnl>=0 else "−"}${abs(tot_rpnl):,.2f}', "pos" if tot_rpnl >= 0 else "neg"),
+        ("Open positions", f'<span class="anim-num" data-val="{len(opens)}" data-fmt="int" data-final="{len(opens)}">{len(opens)}</span>', ""),
+        ("Unrealised P/L", f'<span class="anim-num" data-val="{tot_upnl}" data-fmt="usd2s" data-final="{"+" if tot_upnl>=0 else "−"}${abs(tot_upnl):,.2f}">{"+" if tot_upnl>=0 else "−"}${abs(tot_upnl):,.2f}</span>', "pos" if tot_upnl >= 0 else "neg"),
+        ("Closed positions", f'<span class="anim-num" data-val="{len(closed_eps)}" data-fmt="int" data-final="{len(closed_eps)}">{len(closed_eps)}</span>', ""),
+        ("Realised P/L", f'<span class="anim-num" data-val="{tot_rpnl}" data-fmt="usd2s" data-final="{"+" if tot_rpnl>=0 else "−"}${abs(tot_rpnl):,.2f}">{"+" if tot_rpnl>=0 else "−"}${abs(tot_rpnl):,.2f}</span>', "pos" if tot_rpnl >= 0 else "neg"),
     ])
 
     # sleeve cards
@@ -311,15 +314,15 @@ def build(state, prices, flags):
         pos_html = (f'<table class="postable"><tr class="sub"><td>Position</td><td class="num">Qty</td><td class="num">Value</td><td class="num">of sleeve</td></tr>{posrows}</table>'
                     if posrows else '<div class="sub" style="margin-top:6px">No open positions — the signal is flat, which is a decision too.</div>')
         flat = ' <span class="short" style="background:#452020">FROZEN 15% DD</span>' if sv["flattened"] else ""
-        cards.append(f'''<details class="card">
+        cards.append(f'''<details class="card stag" style="--i:{min(len(cards),14)}">
 <summary><div class="cardhead"><div><b>{sid}</b> <span class="cname">{esc(name)}</span>{flat}</div>
 <div class="cardright"><span class="{rc}">{st["ret"]:+.2%}</span>{spark(st["hist"])}</div></div></summary>
-<div class="cardbody">
+<div class="dwrap"><div class="cardbody">
 <p class="what">{esc(what)}</p>
 <p class="weak"><b>Known weakness:</b> {esc(weak)}</p>
 <div class="statline"><span>Equity <b>{money(st["eq"])}</b></span><span>Drawdown <b>{st["dd"]:.1%}</b></span><span>Cash <b>{money(sv["cash"])}</b></span></div>
 {pos_html}
-</div></details>''')
+</div></div></details>''')
 
     # full check-in history: every journaled event, newest first.
     # Last 60 runs are expandable with full decisions; older runs get one summary line.
@@ -349,7 +352,7 @@ def build(state, prices, flags):
                 verb = "bought" if d["notional"] > 0 else "sold"
                 items.append(f'<div class="act"><b>{d["sleeve"]}</b> {verb} {esc(d["symbol"].replace("/USD",""))} {money(abs(d["notional"]))} <span class="sub">→ target {d["target_w"]*100:.0f}% · fee ${d["fee"]:.2f}</span></div>')
             body = "".join(items) or '<div class="act sub">No trades — every sleeve already at target (holding is a decision too).</div>'
-            feed.append(f'<details class="runcard"><summary class="act" style="cursor:pointer">{head}</summary>{fl}<div style="padding-left:8px">{body}</div></details>')
+            feed.append(f'<details class="runcard"><summary class="act" style="cursor:pointer">{head}</summary><div class="dwrap">{fl}<div style="padding-left:8px">{body}</div></div></details>')
 
     html = f'''<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -377,7 +380,8 @@ h1{{font-family:var(--disp);font-size:1.05rem;margin:18px 0 6px;color:#c3c2b7;fo
 .exprow{{display:flex;align-items:center;gap:8px;margin:7px 0}}
 .explbl{{width:44px;font-size:.8rem;font-weight:600}}
 .exptrack{{flex:1;height:14px;position:relative}}
-.expbar{{height:14px;border-radius:0 4px 4px 0;min-width:2px}}
+.expbar{{height:14px;border-radius:0 4px 4px 0;min-width:2px;width:0;transition:width .9s cubic-bezier(.2,.7,.25,1)}}
+.go .expbar{{width:var(--tw)}}
 .expval{{width:120px;text-align:right;font-size:.78rem;font-variant-numeric:tabular-nums}}
 .card{{background:{SURFACE};border:1px solid rgba(255,255,255,.07);border-radius:12px;margin:8px 0;overflow:hidden}}
 .card summary{{list-style:none;cursor:pointer;padding:11px 12px}}
@@ -400,8 +404,22 @@ h1{{font-family:var(--disp);font-size:1.05rem;margin:18px 0 6px;color:#c3c2b7;fo
 .posrow{{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06)}}
 .posrow:last-child{{border-bottom:none}}
 .posval{{font-family:var(--disp);font-weight:600;font-size:.95rem;white-space:nowrap;font-variant-numeric:tabular-nums}}
-section.tab{{display:none}} section.tab.active{{display:block;animation:fade .15s ease}}
-@keyframes fade{{from{{opacity:.4}}to{{opacity:1}}}}
+section.tab{{display:none}} section.tab.active{{display:block;animation:tabin .32s cubic-bezier(.2,.7,.3,1)}}
+@keyframes tabin{{from{{opacity:0;transform:translateY(10px)}}to{{opacity:1;transform:none}}}}
+@keyframes draw{{to{{stroke-dashoffset:0}}}}
+@keyframes fadein{{to{{opacity:1}}}}
+@keyframes areain{{to{{opacity:.10}}}}
+@keyframes rise{{from{{opacity:0;transform:translateY(8px)}}to{{opacity:1;transform:none}}}}
+@keyframes pulse{{0%{{transform:scale(1);opacity:.55}}70%{{transform:scale(2.6);opacity:0}}100%{{transform:scale(2.6);opacity:0}}}}
+.draw{{stroke-dasharray:1;stroke-dashoffset:1;animation:draw 1.2s .1s cubic-bezier(.4,0,.2,1) forwards}}
+.spark-draw{{stroke-dasharray:1;stroke-dashoffset:1;animation:draw .7s .15s ease-out forwards}}
+.wash{{opacity:0;animation:areain .6s .9s ease forwards}}
+.enddot{{opacity:0;animation:fadein .4s 1.15s ease forwards}}
+.pulsering{{opacity:0;animation:fadein .1s 1.3s forwards, pulse 2.2s 1.4s ease-out 3;transform-origin:center;transform-box:fill-box}}
+.stag{{animation:rise .38s cubic-bezier(.2,.7,.3,1) both;animation-delay:calc(var(--i,0)*40ms)}}
+@media (prefers-reduced-motion: reduce){{
+  *,*::before,*::after{{animation-duration:.01ms!important;animation-delay:0ms!important;transition-duration:.01ms!important}}
+}}
 nav.tabs{{position:fixed;bottom:0;left:0;right:0;display:flex;background:rgba(15,17,21,.92);backdrop-filter:blur(12px);border-top:1px solid rgba(255,255,255,.08);padding-bottom:env(safe-area-inset-bottom);z-index:10}}
 nav.tabs a{{flex:1;text-align:center;padding:9px 0 7px;text-decoration:none;color:#898781;font-size:.66rem;line-height:1.3}}
 nav.tabs a svg{{display:block;margin:0 auto 2px;width:20px;height:20px}}
@@ -419,7 +437,7 @@ body{{padding-bottom:76px}}
 
 <section class="tab" id="overview">
 <div class="sub" style="margin-top:10px">SIMULATED $100,000 · 20 SLEEVES · 7 SYMBOLS</div>
-<div class="hero" style="color:{up}">{tret:+.2%}</div>
+<div class="hero" style="color:{up}"><span class="anim-num" data-val="{tret*100}" data-fmt="pct2" data-final="{tret:+.2%}">{tret:+.2%}</span></div>
 <div class="sub">{money(total)} total · updated {now.strftime('%a %d %b %Y, %H:%M')} UTC · day {max(1,(now.date()-dt.date(2026,7,13)).days+1)} of ~90</div>
 {banner}
 <h1>Account equity</h1>
@@ -489,6 +507,75 @@ body{{padding-bottom:76px}}
   }}
   window.addEventListener("hashchange", show);
   show();
+
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function fmtNum(v, f) {{
+    if (f === "pct2") return (v >= 0 ? "+" : "\u2212") + Math.abs(v).toFixed(2) + "%";
+    if (f === "pct1") return v.toFixed(1) + "%";
+    if (f === "pct0") return Math.round(v) + "%";
+    if (f === "usd0") return "$" + Math.round(v).toLocaleString();
+    if (f === "usd2s") return (v >= 0 ? "+$" : "\u2212$") + Math.abs(v).toLocaleString(undefined, {{minimumFractionDigits: 2, maximumFractionDigits: 2}});
+    return Math.round(v).toLocaleString();
+  }}
+  function runCounter(el) {{
+    if (el.dataset.done) return;
+    el.dataset.done = "1";
+    var v = parseFloat(el.dataset.val), f = el.dataset.fmt, fin = el.dataset.final || el.textContent;
+    if (reduced || isNaN(v)) {{ el.textContent = fin; return; }}
+    var t0 = null, dur = 950;
+    function step(t) {{
+      if (!t0) t0 = t;
+      var p = Math.min((t - t0) / dur, 1), e = 1 - Math.pow(1 - p, 3);
+      el.textContent = fmtNum(v * e, f);
+      if (p < 1) requestAnimationFrame(step); else el.textContent = fin;
+    }}
+    requestAnimationFrame(step);
+  }}
+  var io = new IntersectionObserver(function(es) {{
+    es.forEach(function(en) {{ if (en.isIntersecting) {{ runCounter(en.target); io.unobserve(en.target); }} }});
+  }}, {{threshold: 0.4}});
+  document.querySelectorAll(".anim-num").forEach(function(el) {{ io.observe(el); }});
+
+  // sliding exposure bars: re-run whenever their tab is shown
+  function armBars() {{
+    var sec = document.querySelector("section.tab.active");
+    if (!sec) return;
+    sec.querySelectorAll(".panel").forEach(function(p) {{ p.classList.remove("go"); }});
+    requestAnimationFrame(function() {{ requestAnimationFrame(function() {{
+      sec.querySelectorAll(".panel").forEach(function(p) {{ p.classList.add("go"); }});
+    }}); }});
+  }}
+  window.addEventListener("hashchange", armBars);
+  armBars();
+
+  // measured-height slide for every expandable card
+  document.querySelectorAll("details.card, details.runcard").forEach(function(d) {{
+    var s = d.querySelector("summary"), c = d.querySelector(":scope > .dwrap");
+    if (!s || !c) return;
+    s.addEventListener("click", function(e) {{
+      e.preventDefault();
+      if (reduced) {{ d.open = !d.open; return; }}
+      if (!d.open) {{
+        d.open = true;
+        var h = c.scrollHeight;
+        c.style.height = "0px"; c.style.overflow = "hidden";
+        requestAnimationFrame(function() {{
+          c.style.transition = "height .34s cubic-bezier(.2,.7,.3,1)";
+          c.style.height = h + "px";
+          c.addEventListener("transitionend", function() {{ c.style.cssText = ""; }}, {{once: true}});
+        }});
+      }} else {{
+        var h = c.scrollHeight;
+        c.style.height = h + "px"; c.style.overflow = "hidden";
+        requestAnimationFrame(function() {{
+          c.style.transition = "height .26s ease";
+          c.style.height = "0px";
+          c.addEventListener("transitionend", function() {{ d.open = false; c.style.cssText = ""; }}, {{once: true}});
+        }});
+      }}
+    }});
+  }});
 }})();
 </script>
 </body></html>'''
