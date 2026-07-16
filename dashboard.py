@@ -54,6 +54,240 @@ def sleeve_equity(sv, prices):
     return sv["cash"] + sum(q * prices.get(s, 0.0) for s, q in sv["positions"].items())
 
 
+
+MODAL = """
+<style>
+#eqmodal{position:fixed;inset:0;z-index:30;background:#0f1115;display:none;flex-direction:column;padding:14px;padding-top:calc(14px + env(safe-area-inset-top));padding-bottom:calc(14px + env(safe-area-inset-bottom))}
+#eqmodal.open{display:flex;animation:tabin .3s cubic-bezier(.2,.7,.3,1)}
+.mhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.mtitle{font-family:var(--disp);font-weight:700;font-size:1.05rem}
+.mclose{background:#16171c;border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#c3c2b7;width:38px;height:38px;font-size:1.1rem;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.ranges{display:flex;gap:6px;margin-bottom:10px}
+.ranges button{flex:1;background:#16171c;border:1px solid rgba(255,255,255,.08);border-radius:8px;color:#898781;padding:7px 0;font-size:.78rem;font-family:var(--disp);font-weight:600;cursor:pointer}
+.ranges button.sel{background:#1d2a45;border-color:#3987e5;color:#6da7ec}
+.mstats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
+.mstat{background:#16171c;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:7px 8px}
+.mstat .l{color:#898781;font-size:.62rem;letter-spacing:.04em;text-transform:uppercase}
+.mstat .v{font-family:var(--disp);font-weight:600;font-size:.88rem;margin-top:1px}
+#mchartwrap{flex:1;position:relative;background:#16171c;border:1px solid rgba(255,255,255,.07);border-radius:12px;overflow:hidden;touch-action:none;min-height:200px}
+#mtip{position:absolute;pointer-events:none;background:rgba(15,17,21,.95);border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:7px 9px;font-size:.75rem;display:none;z-index:2;min-width:130px;backdrop-filter:blur(6px)}
+#mtip .tt{color:#898781;font-size:.68rem;margin-bottom:3px}
+#mtip .row{display:flex;align-items:center;gap:6px;margin:2px 0}
+#mtip .key{display:inline-block;width:12px;height:2px;border-radius:1px}
+#mtip .val{font-family:var(--disp);font-weight:600}
+#mtip .nm{color:#898781;font-size:.68rem}
+.mlegend{display:flex;gap:14px;margin-top:8px;font-size:.72rem;color:#c3c2b7;align-items:center}
+.mlegend .key{display:inline-block;width:14px;height:2px;border-radius:1px;margin-right:5px;vertical-align:3px}
+</style>
+<div id="eqmodal" role="dialog" aria-label="Interactive account equity chart">
+<div class="mhead"><span class="mtitle">Account equity</span>
+<button class="mclose" id="mclose" aria-label="Close">&#10005;</button></div>
+<div class="ranges" id="mranges">
+<button data-r="86400">24H</button><button data-r="604800">7D</button>
+<button data-r="2592000">30D</button><button data-r="0" class="sel">ALL</button>
+</div>
+<div class="mstats">
+<div class="mstat"><div class="l">Return</div><div class="v" id="ms-ret">&ndash;</div></div>
+<div class="mstat"><div class="l">High</div><div class="v" id="ms-hi">&ndash;</div></div>
+<div class="mstat"><div class="l">Low</div><div class="v" id="ms-lo">&ndash;</div></div>
+<div class="mstat"><div class="l">Max DD</div><div class="v" id="ms-dd">&ndash;</div></div>
+</div>
+<div id="mchartwrap"><div id="mtip"></div></div>
+<div class="mlegend">
+<span><span class="key" style="background:#3987e5"></span>Account</span>
+<span><span class="key" style="background:#6a6c72"></span>Buy &amp; hold control (rebased)</span>
+<span style="margin-left:auto" class="sub" id="mcount"></span>
+</div>
+</div>
+<script>
+(function() {
+  var D = __DATA__;
+  var modal = document.getElementById("eqmodal"), wrap = document.getElementById("mchartwrap");
+  var tip = document.getElementById("mtip");
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var rangeSec = 0, view = null;
+
+  function usd(v) { return "$" + Math.round(v).toLocaleString(); }
+  function pct(v) { return (v >= 0 ? "+" : "−") + Math.abs(v * 100).toFixed(2) + "%"; }
+  function fdate(ts) {
+    var d = new Date(ts * 1000);
+    return d.toLocaleDateString(undefined, {day: "numeric", month: "short"}) + " " +
+           d.toLocaleTimeString(undefined, {hour: "2-digit", minute: "2-digit"});
+  }
+
+  function slice() {
+    var n = D.t.length, from = 0;
+    if (rangeSec > 0) {
+      var cut = D.t[n - 1] - rangeSec;
+      for (var i = 0; i < n; i++) { if (D.t[i] >= cut) { from = i; break; } }
+      if (from > 0) from -= 1;  // include one point of context before the window
+    }
+    return {t: D.t.slice(from), v: D.v.slice(from), f: D.f.slice(from), b: D.b.slice(from)};
+  }
+
+  function stats(s) {
+    var hi = -1e18, lo = 1e18, peak = -1e18, dd = 0;
+    for (var i = 0; i < s.v.length; i++) {
+      var v = s.v[i];
+      if (v > hi) hi = v; if (v < lo) lo = v;
+      if (v > peak) peak = v;
+      dd = Math.max(dd, 1 - v / peak);
+    }
+    document.getElementById("ms-ret").textContent = pct(s.v[s.v.length - 1] / s.v[0] - 1);
+    document.getElementById("ms-ret").style.color = s.v[s.v.length - 1] >= s.v[0] ? "#0ca30c" : "#e66767";
+    document.getElementById("ms-hi").textContent = usd(hi);
+    document.getElementById("ms-lo").textContent = usd(lo);
+    document.getElementById("ms-dd").textContent = (dd * 100).toFixed(2) + "%";
+    document.getElementById("mcount").textContent = s.t.length + " check-ins";
+  }
+
+  function render() {
+    var s = slice();
+    if (s.t.length < 2) return;
+    stats(s);
+    var W = wrap.clientWidth, H = wrap.clientHeight;
+    var padl = 58, padr = 16, padt = 16, padb = 26;
+    var lo = 1e18, hi = -1e18;
+    for (var i = 0; i < s.v.length; i++) {
+      lo = Math.min(lo, s.v[i], s.b[i] || 1e18);
+      hi = Math.max(hi, s.v[i], s.b[i] || -1e18);
+    }
+    var span = (hi - lo) || 1; lo -= span * 0.12; hi += span * 0.12;
+    var t0 = s.t[0], t1 = s.t[s.t.length - 1];
+    function X(t) { return padl + (t - t0) / ((t1 - t0) || 1) * (W - padl - padr); }
+    function Y(v) { return padt + (1 - (v - lo) / (hi - lo)) * (H - padt - padb); }
+    var svgNS = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("width", W); svg.setAttribute("height", H);
+    function el(tag, attrs, parent) {
+      var e = document.createElementNS(svgNS, tag);
+      for (var k in attrs) e.setAttribute(k, attrs[k]);
+      (parent || svg).appendChild(e); return e;
+    }
+    for (var g = 0; g <= 2; g++) {
+      var gv = lo + (hi - lo) * g / 2, gy = Y(gv);
+      el("line", {x1: padl, y1: gy, x2: W - padr, y2: gy, stroke: "#2c2c2a", "stroke-width": 1});
+      var txt = el("text", {x: padl - 6, y: gy + 3.5, "text-anchor": "end", "font-size": 10, fill: "#898781"});
+      txt.textContent = usd(gv);
+    }
+    var d0 = el("text", {x: padl, y: H - 8, "font-size": 10, fill: "#898781"});
+    d0.textContent = fdate(t0);
+    var d1 = el("text", {x: W - padr, y: H - 8, "text-anchor": "end", "font-size": 10, fill: "#898781"});
+    d1.textContent = fdate(t1);
+    function poly(vals, color, width, cls) {
+      var pts = [];
+      for (var i = 0; i < vals.length; i++) if (vals[i] != null) pts.push(X(s.t[i]).toFixed(1) + "," + Y(vals[i]).toFixed(1));
+      var p = el("polyline", {points: pts.join(" "), fill: "none", stroke: color,
+                              "stroke-width": width, "stroke-linejoin": "round", "stroke-linecap": "round"});
+      if (cls && !reduced) { p.setAttribute("pathLength", "1"); p.setAttribute("class", cls); }
+      return p;
+    }
+    poly(s.b, "#6a6c72", 1.5);
+    // area wash under account line
+    var apts = "M " + X(s.t[0]).toFixed(1) + "," + Y(lo).toFixed(1);
+    for (var i = 0; i < s.v.length; i++) apts += " L " + X(s.t[i]).toFixed(1) + "," + Y(s.v[i]).toFixed(1);
+    apts += " L " + X(s.t[s.t.length - 1]).toFixed(1) + "," + Y(lo).toFixed(1) + " Z";
+    el("path", {d: apts, fill: "#3987e5", opacity: reduced ? .08 : 0, "class": reduced ? "" : "wash"});
+    poly(s.v, "#3987e5", 2, "draw");
+    // fill markers where trades happened
+    for (var i = 0; i < s.f.length; i++) if (s.f[i] > 0)
+      el("circle", {cx: X(s.t[i]), cy: Y(s.v[i]), r: 3, fill: "#3987e5", stroke: "#16171c", "stroke-width": 2});
+    // crosshair layer
+    var ch = el("line", {x1: 0, y1: padt, x2: 0, y2: H - padb, stroke: "#52514e", "stroke-width": 1, opacity: 0});
+    var dotA = el("circle", {r: 5, fill: "#3987e5", stroke: "#0f1115", "stroke-width": 2, opacity: 0});
+    var dotB = el("circle", {r: 4, fill: "#6a6c72", stroke: "#0f1115", "stroke-width": 2, opacity: 0});
+    wrap.querySelectorAll("svg").forEach(function(x) { x.remove(); });
+    wrap.appendChild(svg);
+    view = {s: s, X: X, Y: Y, ch: ch, dotA: dotA, dotB: dotB, W: W, H: H, padl: padl, padr: padr};
+  }
+
+  function showAt(idx) {
+    if (!view) return;
+    var s = view.s, x = view.X(s.t[idx]);
+    view.ch.setAttribute("x1", x); view.ch.setAttribute("x2", x); view.ch.setAttribute("opacity", 1);
+    view.dotA.setAttribute("cx", x); view.dotA.setAttribute("cy", view.Y(s.v[idx])); view.dotA.setAttribute("opacity", 1);
+    if (s.b[idx] != null) {
+      view.dotB.setAttribute("cx", x); view.dotB.setAttribute("cy", view.Y(s.b[idx])); view.dotB.setAttribute("opacity", 1);
+    } else view.dotB.setAttribute("opacity", 0);
+    while (tip.firstChild) tip.removeChild(tip.firstChild);
+    function row(color, name, valTxt) {
+      var r = document.createElement("div"); r.className = "row";
+      var k = document.createElement("span"); k.className = "key"; k.style.background = color;
+      var v = document.createElement("span"); v.className = "val"; v.textContent = valTxt;
+      var n = document.createElement("span"); n.className = "nm"; n.textContent = name;
+      r.appendChild(k); r.appendChild(v); r.appendChild(n); tip.appendChild(r);
+    }
+    var tt = document.createElement("div"); tt.className = "tt"; tt.textContent = fdate(s.t[idx]); tip.appendChild(tt);
+    row("#3987e5", "account · " + pct(s.v[idx] / D.start - 1), usd(s.v[idx]));
+    if (s.b[idx] != null) row("#6a6c72", "buy & hold", usd(s.b[idx]));
+    if (idx > 0) {
+      var chg = document.createElement("div"); chg.className = "tt";
+      var dv = s.v[idx] - s.v[idx - 1];
+      chg.textContent = (dv >= 0 ? "+" : "−") + "$" + Math.abs(dv).toFixed(0) + " since prior check-in" +
+                        (s.f[idx] ? " · " + s.f[idx] + " fills" : " · no trades");
+      tip.appendChild(chg);
+    }
+    tip.style.display = "block";
+    var tw = tip.offsetWidth;
+    var left = x + 12; if (left + tw > view.W - 8) left = x - tw - 12;
+    tip.style.left = Math.max(4, left) + "px";
+    tip.style.top = "14px";
+  }
+
+  function nearest(clientX) {
+    if (!view) return 0;
+    var rect = wrap.getBoundingClientRect(), px = clientX - rect.left;
+    var s = view.s, best = 0, bd = 1e18;
+    for (var i = 0; i < s.t.length; i++) {
+      var d = Math.abs(view.X(s.t[i]) - px);
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+  }
+  var curIdx = -1;
+  wrap.addEventListener("pointermove", function(e) { curIdx = nearest(e.clientX); showAt(curIdx); });
+  wrap.addEventListener("pointerdown", function(e) { curIdx = nearest(e.clientX); showAt(curIdx); });
+  wrap.addEventListener("pointerleave", function() {
+    tip.style.display = "none";
+    if (view) { view.ch.setAttribute("opacity", 0); view.dotA.setAttribute("opacity", 0); view.dotB.setAttribute("opacity", 0); }
+  });
+  modal.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") close();
+    if (!view) return;
+    if (e.key === "ArrowRight") { curIdx = Math.min(curIdx + 1, view.s.t.length - 1); showAt(curIdx); }
+    if (e.key === "ArrowLeft") { curIdx = Math.max(curIdx - 1, 0); showAt(curIdx); }
+  });
+
+  document.getElementById("mranges").addEventListener("click", function(e) {
+    var b = e.target.closest("button"); if (!b) return;
+    this.querySelectorAll("button").forEach(function(x) { x.classList.remove("sel"); });
+    b.classList.add("sel");
+    rangeSec = parseInt(b.dataset.r, 10);
+    render();
+  });
+
+  function open() {
+    modal.classList.add("open");
+    document.body.style.overflow = "hidden";
+    modal.setAttribute("tabindex", "-1"); modal.focus();
+    requestAnimationFrame(render);
+  }
+  function close() {
+    modal.classList.remove("open");
+    document.body.style.overflow = "";
+  }
+  var panel = document.getElementById("eqpanel");
+  if (panel) {
+    panel.addEventListener("click", open);
+    panel.addEventListener("keydown", function(e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+  }
+  document.getElementById("mclose").addEventListener("click", close);
+  window.addEventListener("resize", function() { if (modal.classList.contains("open")) render(); });
+})();
+</script>
+"""
+
+
 # ---------------- SVG builders ----------------
 
 def spark(vals, w=110, h=30):
@@ -205,7 +439,7 @@ def build(state, prices, flags):
     now = dt.datetime.now(dt.timezone.utc)
 
     # journal: account curve + full event history
-    curve, events = [], []
+    curve, events, curve_fills = [], [], []
     jp = os.path.join(HERE, "state", "journal.jsonl")
     if os.path.exists(jp):
         for ln in open(jp):
@@ -216,6 +450,7 @@ def build(state, prices, flags):
             events.append(j)
             if j.get("type") == "run" and not j.get("dry"):
                 curve.append((dt.datetime.fromisoformat(j["ts"]).replace(tzinfo=None), j["total_equity"]))
+                curve_fills.append(len(j.get("decisions", [])))
     runs = [j for j in events if j.get("type") == "run" and not j.get("dry")]
 
     # sleeve stats
@@ -233,6 +468,24 @@ def build(state, prices, flags):
                       "hist": [pt[1] for pt in sv["history"]][-40:], "sv": sv}
     tret = total / (cap * n) - 1
     curve.append((now.replace(tzinfo=None), round(total, 2)))
+    curve_fills.append(0)
+
+    # interactive-chart payload: account curve + S10 buy&hold rebased to 100k
+    s10_hist = [(dt.datetime.fromisoformat(a).replace(tzinfo=None).timestamp(), b)
+                for a, b in state["sleeves"]["S10"]["history"]]
+    def s10_at(ts):
+        best = None
+        for t_, v_ in s10_hist:
+            if best is None or abs(t_ - ts) < abs(best[0] - ts):
+                best = (t_, v_)
+        return round(best[1] / cap * cap * n, 2) if best and abs(best[0] - ts) < 43200 else None
+    chart_data = {
+        "t": [int(p[0].timestamp()) for p in curve],
+        "v": [p[1] for p in curve],
+        "f": curve_fills,
+        "b": [s10_at(p[0].timestamp()) for p in curve],
+        "start": cap * n,
+    }
     gross = sum(abs(v) for v in exposure.values())
     best = max(stats, key=lambda k: stats[k]["ret"])
     worst = min(stats, key=lambda k: stats[k]["ret"])
@@ -441,7 +694,8 @@ body{{padding-bottom:76px}}
 <div class="sub">{money(total)} total · updated {now.strftime('%a %d %b %Y, %H:%M')} UTC · day {max(1,(now.date()-dt.date(2026,7,13)).days+1)} of ~90</div>
 {banner}
 <h1>Account equity</h1>
-<div class="panel">{equity_chart(curve)}</div>
+<div class="panel" id="eqpanel" role="button" tabindex="0" aria-label="Open interactive equity chart" style="cursor:pointer">{equity_chart(curve)}
+<div class="sub" style="text-align:center;margin-top:4px">Tap for interactive view</div></div>
 <h1>Vitals</h1>
 <div class="kpis">{kpis}</div>
 <h1>Net exposure by symbol</h1>
@@ -579,6 +833,8 @@ body{{padding-bottom:76px}}
 }})();
 </script>
 </body></html>'''
+    html = html.replace("</body></html>",
+                        MODAL.replace("__DATA__", json.dumps(chart_data)) + "\n</body></html>")
     with open(OUT, "w") as f:
         f.write(html)
     pub = os.path.join(HERE, "docs")
