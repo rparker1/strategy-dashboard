@@ -532,16 +532,40 @@ def build(state, prices, flags):
             mid = f'fees ${p["fees"]:.2f}'
             when = f'{p["opened"]} → {p["closed"]}'
         sign = "+" if p["pnl"] >= 0 else "−"
-        return (f'<div class="posrow stag" style="--i:{min(p.get("_i",0),14)}"><div><b>{esc(p["symbol"].replace("/USD",""))}</b> {side}'
+        return (f'<div class="posrow stag" style="--i:{min(p.get("_i",0),14)}" data-sym="{esc(p["symbol"].replace("/USD",""))}" '
+                f'data-pnl="{p["pnl"]:.2f}" data-pct="{p["pct"]:.4f}" data-val="{abs(p.get("qty",0)*p.get("px",0)):.2f}"><div><b>{esc(p["symbol"].replace("/USD",""))}</b> {side}'
                 f'<div class="sub">{p["sleeve"]} · {esc(name)} · {when}</div>'
                 f'<div class="sub">{mid}</div></div>'
                 f'<div class="posval {cls}">{sign}${abs(p["pnl"]):,.2f}'
                 f'<div class="sub" style="text-align:right">{p["pct"]:+.2%}</div></div></div>')
 
-    for _i, _p in enumerate(opens): _p["_i"] = _i
-    for _i, _p in enumerate(closed_eps): _p["_i"] = _i
-    open_html = "".join(prow(p, True) for p in opens) or '<div class="sub">No open positions.</div>'
-    closed_html = "".join(prow(c, False) for c in closed_eps[:100]) or \
+    for _i, _p in enumerate(opens): _p["_i"] = min(_i, 10)
+    for _i, _p in enumerate(closed_eps): _p["_i"] = min(_i, 10)
+
+    def pgroup_html(items, is_open):
+        by_sleeve = {}
+        for p in items:
+            by_sleeve.setdefault(p["sleeve"], []).append(p)
+        groups = []
+        order = [s for s in CFG["sleeves"] if s in by_sleeve]
+        for sid in order:
+            rows_ = by_sleeve[sid]
+            sub = sum(p["pnl"] for p in rows_)
+            scls = "pos" if sub >= 0 else "neg"
+            sign = "+" if sub >= 0 else "−"
+            body = "".join(prow(p, is_open) for p in rows_)
+            groups.append(
+                f'<details class="pgroup" data-sleeve="{sid}">'
+                f'<summary><span><b>{sid}</b> <span class="cname">{esc(META[sid][0])}</span> '
+                f'<span class="sub gcount">{len(rows_)}</span></span>'
+                f'<span class="{scls} gsub" style="font-family:var(--disp)">{sign}${abs(sub):,.2f}</span></summary>'
+                f'<div class="grows">{body}</div></details>')
+        return "".join(groups)
+
+    symchips = "".join(f'<button class="fchip" data-sym="{s.replace("/USD","")}">{s.replace("/USD","")}</button>'
+                       for s in CFG["stock_symbols"] + CFG["crypto_symbols"])
+    open_html = pgroup_html(opens, True) or '<div class="sub">No open positions.</div>'
+    closed_html = pgroup_html(closed_eps, False) or \
                   '<div class="sub">No closed positions yet — every position opened so far is still running.</div>'
     pos_kpis = "".join(f'<div class="kpi"><div class="klabel">{l}</div><div class="kval {c}">{v}</div></div>'
                        for l, v, c in [
@@ -657,6 +681,26 @@ h1{{font-family:var(--disp);font-size:1.05rem;margin:18px 0 6px;color:#c3c2b7;fo
 .posrow{{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06)}}
 .posrow:last-child{{border-bottom:none}}
 .posval{{font-family:var(--disp);font-weight:600;font-size:.95rem;white-space:nowrap;font-variant-numeric:tabular-nums}}
+.fbar{{position:sticky;top:46px;z-index:8;background:rgba(15,17,21,.94);backdrop-filter:blur(10px);margin:6px -14px 0;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,.05)}}
+.fchips{{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:6px}}
+.fchips::-webkit-scrollbar{{display:none}}
+.fchip{{background:#16171c;border:1px solid rgba(255,255,255,.08);border-radius:999px;color:#898781;padding:5px 13px;font-size:.75rem;font-family:var(--disp);font-weight:600;cursor:pointer;white-space:nowrap}}
+.fchip.sel{{background:#1d2a45;border-color:#3987e5;color:#6da7ec}}
+.frow2{{display:flex;gap:8px;justify-content:space-between}}
+.fseg{{display:flex;background:#16171c;border:1px solid rgba(255,255,255,.08);border-radius:8px;overflow:hidden}}
+.fseg button{{background:none;border:none;color:#898781;padding:5px 11px;font-size:.72rem;font-family:var(--disp);font-weight:600;cursor:pointer}}
+.fseg button.sel{{background:#1d2a45;color:#6da7ec}}
+.pgroup{{border-bottom:1px solid rgba(255,255,255,.06)}}
+.pgroup:last-child{{border-bottom:none}}
+.pgroup summary{{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 0}}
+.pgroup summary::-webkit-details-marker{{display:none}}
+.pgroup summary > span:first-child::before{{content:"▸";color:#898781;margin-right:8px}}
+.pgroup[open] summary > span:first-child::before{{content:"▾"}}
+.gcount{{background:#22242b;border-radius:999px;padding:1px 8px;margin-left:6px;font-size:.68rem}}
+.grows{{padding-left:6px}}
+.posarea.flat .pgroup summary{{display:none}}
+.posarea.flat .pgroup{{border:none}}
+.posarea.flat .grows{{padding-left:0}}
 section.tab{{display:none}} section.tab.active{{display:block;animation:tabin .32s cubic-bezier(.2,.7,.3,1)}}
 @keyframes tabin{{from{{opacity:0;transform:translateY(10px)}}to{{opacity:1;transform:none}}}}
 @keyframes draw{{to{{stroke-dashoffset:0}}}}
@@ -706,11 +750,17 @@ body{{padding-bottom:76px}}
 <section class="tab" id="positions">
 <h1 style="margin-top:14px">Position P/L</h1>
 <div class="kpis">{pos_kpis}</div>
-<div class="sub" style="margin:8px 2px">P/L is net of the fee/slippage haircut. The same symbol appears once per strategy that holds it — each sleeve runs its own book. Average-cost basis, reconstructed from the trade journal.</div>
-<h1>Open positions</h1>
-<div class="panel">{open_html}</div>
-<h1>Closed positions</h1>
-<div class="panel">{closed_html}</div>
+<div class="fbar">
+<div class="fchips" id="symchips"><button class="fchip sel" data-sym="">All</button>{symchips}</div>
+<div class="frow2">
+<div class="fseg" id="viewseg"><button class="sel" data-view="group">By strategy</button><button data-view="flat">Flat</button></div>
+<div class="fseg" id="sortseg"><button class="sel" data-sort="val">Size</button><button data-sort="pnl">P/L</button><button data-sort="pct">P/L %</button></div>
+</div></div>
+<div class="sub" style="margin:8px 2px">Net of fees. Each strategy runs its own book, so a symbol can appear once per sleeve. Tap a strategy group to expand; subtotal on the right.</div>
+<h1>Open positions <span class="sub" id="opencount"></span></h1>
+<div class="panel posarea" id="openarea">{open_html}</div>
+<h1>Closed positions <span class="sub" id="closedcount"></span></h1>
+<div class="panel posarea" id="closedarea">{closed_html}</div>
 </section>
 
 <section class="tab" id="strategies">
@@ -804,6 +854,74 @@ body{{padding-bottom:76px}}
   armBars();
 
   // measured-height slide for every expandable card
+
+  // ---- positions tab: filter / view / sort
+  (function() {{
+    var symSel = "", viewMode = "group", sortKey = "val";
+    var areas = [document.getElementById("openarea"), document.getElementById("closedarea")];
+    if (!areas[0]) return;
+
+    function apply() {{
+      areas.forEach(function(area) {{
+        if (!area) return;
+        area.classList.toggle("flat", viewMode === "flat");
+        var shown = 0;
+        area.querySelectorAll(".pgroup").forEach(function(g) {{
+          var vis = 0, sub = 0;
+          var rows = Array.prototype.slice.call(g.querySelectorAll(".posrow"));
+          rows.forEach(function(r) {{
+            var ok = !symSel || r.dataset.sym === symSel;
+            r.style.display = ok ? "" : "none";
+            if (ok) {{ vis++; sub += parseFloat(r.dataset.pnl) || 0; }}
+          }});
+          rows.sort(function(a, b) {{
+            return (parseFloat(b.dataset[sortKey]) || 0) - (parseFloat(a.dataset[sortKey]) || 0);
+          }});
+          var host = g.querySelector(".grows");
+          rows.forEach(function(r) {{ host.appendChild(r); }});
+          g.style.display = vis ? "" : "none";
+          if (viewMode === "flat") g.open = true;
+          var cnt = g.querySelector(".gcount"), subEl = g.querySelector(".gsub");
+          if (cnt) cnt.textContent = vis;
+          if (subEl) {{
+            subEl.textContent = (sub >= 0 ? "+$" : "\u2212$") + Math.abs(sub).toLocaleString(undefined, {{minimumFractionDigits: 2, maximumFractionDigits: 2}});
+            subEl.className = (sub >= 0 ? "pos" : "neg") + " gsub";
+            subEl.style.fontFamily = "var(--disp)";
+          }}
+          shown += vis;
+        }});
+        var lbl = document.getElementById(area.id === "openarea" ? "opencount" : "closedcount");
+        if (lbl) lbl.textContent = "· " + shown + " shown";
+      }});
+    }}
+
+    document.getElementById("symchips").addEventListener("click", function(e) {{
+      var b = e.target.closest(".fchip"); if (!b) return;
+      this.querySelectorAll(".fchip").forEach(function(x) {{ x.classList.remove("sel"); }});
+      b.classList.add("sel");
+      symSel = b.dataset.sym;
+      apply();
+    }});
+    document.getElementById("viewseg").addEventListener("click", function(e) {{
+      var b = e.target.closest("button"); if (!b) return;
+      this.querySelectorAll("button").forEach(function(x) {{ x.classList.remove("sel"); }});
+      b.classList.add("sel");
+      viewMode = b.dataset.view;
+      if (viewMode === "group") {{
+        areas.forEach(function(a) {{ if (a) a.querySelectorAll(".pgroup").forEach(function(g) {{ g.open = false; }}); }});
+      }}
+      apply();
+    }});
+    document.getElementById("sortseg").addEventListener("click", function(e) {{
+      var b = e.target.closest("button"); if (!b) return;
+      this.querySelectorAll("button").forEach(function(x) {{ x.classList.remove("sel"); }});
+      b.classList.add("sel");
+      sortKey = b.dataset.sort;
+      apply();
+    }});
+    apply();
+  }})();
+
   document.querySelectorAll("details.card, details.runcard").forEach(function(d) {{
     var s = d.querySelector("summary"), c = d.querySelector(":scope > .dwrap");
     if (!s || !c) return;
