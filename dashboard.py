@@ -78,6 +78,18 @@ MODAL = """
 #mtip .nm{color:#898781;font-size:.68rem}
 .mlegend{display:flex;gap:14px;margin-top:8px;font-size:.72rem;color:#c3c2b7;align-items:center}
 .mlegend .key{display:inline-block;width:14px;height:2px;border-radius:1px;margin-right:5px;vertical-align:3px}
+@media (orientation: landscape) and (max-height: 520px){
+#eqmodal.open{display:grid;grid-template-columns:210px 1fr;grid-template-rows:auto auto 1fr auto;gap:0 14px;
+grid-template-areas:"head chart" "ranges chart" "stats chart" "legend chart";
+padding-left:calc(14px + env(safe-area-inset-left));padding-right:calc(14px + env(safe-area-inset-right))}
+.mhead{grid-area:head}
+.ranges{grid-area:ranges;flex-wrap:wrap}
+.ranges button{flex:1 1 40%;padding:6px 0}
+.mstats{grid-area:stats;grid-template-columns:1fr 1fr;align-content:start}
+#mchartwrap{grid-area:chart;min-height:0}
+.mlegend{grid-area:legend;flex-direction:column;align-items:flex-start;gap:4px}
+.mlegend > span[style]{margin-left:0 !important}
+}
 </style>
 <div id="eqmodal" role="dialog" aria-label="Interactive account equity chart">
 <div class="mhead"><span class="mtitle">Account equity</span>
@@ -282,7 +294,13 @@ MODAL = """
     panel.addEventListener("keydown", function(e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
   }
   document.getElementById("mclose").addEventListener("click", close);
-  window.addEventListener("resize", function() { if (modal.classList.contains("open")) render(); });
+  function rerender() { if (modal.classList.contains("open")) render(); }
+  window.addEventListener("resize", rerender);
+  window.addEventListener("orientationchange", function() {
+    setTimeout(rerender, 120); setTimeout(rerender, 400);  // iOS settles late
+  });
+  if (screen.orientation && screen.orientation.addEventListener)
+    screen.orientation.addEventListener("change", function() { setTimeout(rerender, 120); });
 })();
 </script>
 """
