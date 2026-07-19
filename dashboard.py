@@ -650,7 +650,7 @@ def build(state, prices, flags):
             feed.append(f'<details class="runcard"><summary class="act" style="cursor:pointer">{head}</summary><div class="dwrap">{fl}<div style="padding-left:8px">{body}</div></div></details>')
 
     html = f'''<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="{PAGE}">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -735,8 +735,8 @@ section.tab{{display:none}} section.tab.active{{display:block;animation:tabin .3
 @media (prefers-reduced-motion: reduce){{
   *,*::before,*::after{{animation-duration:.01ms!important;animation-delay:0ms!important;transition-duration:.01ms!important}}
 }}
-nav.tabs{{position:fixed;bottom:0;left:0;right:0;display:flex;background:rgba(15,17,21,.92);backdrop-filter:blur(12px);border-top:1px solid rgba(255,255,255,.08);padding-bottom:env(safe-area-inset-bottom);z-index:10}}
-nav.tabs a{{flex:1;text-align:center;padding:9px 0 7px;text-decoration:none;color:#898781;font-size:.66rem;line-height:1.3}}
+nav.tabs{{position:fixed;bottom:0;left:0;right:0;display:flex;background:rgba(15,17,21,.92);backdrop-filter:blur(12px);border-top:1px solid rgba(255,255,255,.08);padding-bottom:max(6px, env(safe-area-inset-bottom));padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);z-index:10}}
+nav.tabs a{{flex:1;text-align:center;padding:10px 0 8px;text-decoration:none;color:#898781;font-size:.66rem;line-height:1.3;-webkit-tap-highlight-color:transparent}}
 nav.tabs a svg{{display:block;margin:0 auto 2px;width:20px;height:20px}}
 nav.tabs a.active{{color:#3987e5;font-weight:600}}
 .chip{{display:inline-block;font-size:.62rem;font-weight:700;letter-spacing:.06em;padding:2px 7px;border-radius:4px;vertical-align:1px;margin-right:6px}}
@@ -745,7 +745,7 @@ nav.tabs a.active{{color:#3987e5;font-weight:600}}
 .doc p{{font-size:.85rem;color:#c3c2b7;line-height:1.5}}
 .doc b{{color:#e8eaed}}
 footer{{margin:22px 0 10px;color:#898781;font-size:.72rem;line-height:1.5}}
-body{{padding-bottom:76px}}
+body{{padding-bottom:calc(84px + env(safe-area-inset-bottom))}}
 </style></head><body>
 <div class="topbar"><span style="font-family:var(--disp);font-weight:700;letter-spacing:.01em">Strategy Test</span>
 <span class="{'pos' if tret>=0 else 'neg'}" style="font-family:var(--disp);font-size:.95rem">{tret:+.2%} · {money(total)}</span></div>
