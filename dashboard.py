@@ -699,7 +699,7 @@ h1{{font-family:var(--disp);font-size:1.05rem;margin:18px 0 6px;color:#c3c2b7;fo
 .posrow{{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06)}}
 .posrow:last-child{{border-bottom:none}}
 .posval{{font-family:var(--disp);font-weight:600;font-size:.95rem;white-space:nowrap;font-variant-numeric:tabular-nums}}
-.fbar{{position:sticky;top:46px;z-index:8;background:rgba(15,17,21,.94);backdrop-filter:blur(10px);margin:6px -14px 0;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,.05)}}
+.fbar{{position:sticky;top:calc(46px + env(safe-area-inset-top));z-index:8;background:rgba(15,17,21,.94);backdrop-filter:blur(10px);margin:6px -14px 0;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,.05)}}
 .fchips{{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:6px}}
 .fchips::-webkit-scrollbar{{display:none}}
 .fchip{{background:#16171c;border:1px solid rgba(255,255,255,.08);border-radius:999px;color:#898781;padding:5px 13px;font-size:.75rem;font-family:var(--disp);font-weight:600;cursor:pointer;white-space:nowrap}}
@@ -741,7 +741,7 @@ nav.tabs a svg{{display:block;margin:0 auto 2px;width:20px;height:20px}}
 nav.tabs a.active{{color:#3987e5;font-weight:600}}
 .chip{{display:inline-block;font-size:.62rem;font-weight:700;letter-spacing:.06em;padding:2px 7px;border-radius:4px;vertical-align:1px;margin-right:6px}}
 .chip.dec{{background:#1d2a45;color:#6da7ec}} .chip.rev{{background:#2a2438;color:#9085e9}}
-.topbar{{position:sticky;top:0;background:rgba(15,17,21,.92);backdrop-filter:blur(12px);z-index:9;padding:10px 0 8px;margin:0 -14px;padding-left:14px;padding-right:14px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;justify-content:space-between;align-items:baseline}}
+.topbar{{position:sticky;top:0;background:rgba(15,17,21,.92);backdrop-filter:blur(12px);z-index:9;padding:10px 0 8px;margin:0 -14px;padding-left:max(14px, env(safe-area-inset-left));padding-right:max(14px, env(safe-area-inset-right));padding-top:calc(10px + env(safe-area-inset-top));border-bottom:1px solid rgba(255,255,255,.06);display:flex;justify-content:space-between;align-items:baseline}}
 .doc p{{font-size:.85rem;color:#c3c2b7;line-height:1.5}}
 .doc b{{color:#e8eaed}}
 footer{{margin:22px 0 10px;color:#898781;font-size:.72rem;line-height:1.5}}
