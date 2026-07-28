@@ -125,3 +125,8 @@ Read the run output flags and `state/journal.jsonl` tail. Rules of engagement:
   a narrow `since` and compare overlapping rows.
 - Alpha Vantage rate limit message ("Information": ...) instead of data means
   quota exhausted — skip stocks this run, use last closes, note it in journal.
+- Alpha Vantage TIME_SERIES_DAILY can serve a WEEKS-stale cached payload
+  through this fetch route (seen 2026-07-28: newest row was 15 days old).
+  Always check the newest returned date; if stale, re-fetch with a
+  cache-busting dummy query param (e.g. `&cb=<YYYYMMDD><am|pm>`) — that fixed
+  it. `datatype=csv` does NOT work through this route (arrives as binary).
