@@ -62,15 +62,21 @@ def ensure_pages():
 def push():
     if not os.path.isdir(os.path.join(HERE, ".git")):
         sh("git", "init", "-b", "main")
-        sh("git", "config", "user.email", "bot@strategy-test.local")
-        sh("git", "config", "user.name", "Strategy Test Bot")
+    # Identity must be set on EVERY run, not just on init: the standard restore
+    # path is a fresh clone, which has a .git dir but no local identity, and a
+    # container with no global git config then fails `git commit` silently.
+    sh("git", "config", "user.email", "bot@strategy-test.local")
+    sh("git", "config", "user.name", "Strategy Test Bot")
     sh("git", "config", "merge.ours.driver", "true")  # for generated-HTML merges
     remote = f"https://x-access-token:{TOKEN}@github.com/{USER}/{REPO}.git"
     sh("git", "remote", "remove", "origin")
     sh("git", "remote", "add", "origin", remote)
     sh("git", "add", "-A")
     r = sh("git", "commit", "-m", "check-in update")
-    if "nothing to commit" in r.stdout + r.stderr:
+    out = r.stdout + r.stderr
+    if r.returncode != 0 and "nothing to commit" not in out:
+        raise RuntimeError(f"commit failed: {out[-400:]}")
+    if "nothing to commit" in out:
         print("no changes to commit")
     r = sh("git", "push", "-u", "origin", "main")
     if r.returncode != 0:
