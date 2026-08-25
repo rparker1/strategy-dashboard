@@ -13,3 +13,20 @@
 - **Default the Kraken fetch to `since=1`, not the bare OHLC URL.** This morning the bare `OHLC?pair=...&interval=1440` URL served a day-stale cached snapshot for BTC and ETH; `&since=1` returned current data for ETH from the same route seconds later. SOL happened to be fresh on the bare URL, so the staleness is per-cache-key rather than per-endpoint. Runbook change candidate: fetch `since=1` first, and treat a payload whose `last` field is more than one interval behind the container clock as stale regardless of how recent the newest row looks.
 - **Validate freshness on the payload's `last` field, not the newest row.** The newest row is always the incomplete bar, so "newest row is yesterday" reads as acceptable even when the response is a full day behind. Comparing `last` to the expected last committed interval catches it immediately, and would have caught this run's BTC problem without the accidental corroboration from yesterday's journal.
 - **The fetch route de-duplicates identical URLs for up to an hour.** Once a stale payload has been received, the same URL cannot be retried within the run, so there must be more than one distinct cache-bust URL per symbol available (e.g. varying `since` to a real recent epoch) or a stale fetch is unrecoverable for that check-in. This is what left BTC unrepairable today.
+
+## 2026-08-25 (morning) — infrastructure, for the 60-day review
+- Fetch-route freshness is non-deterministic per URL variant. Both the plain
+  Kraken OHLC URL and the `since=1` cache-bust variant can return a stale
+  cached payload, and which one is fresher differs by pair on the same run
+  (25 Aug: plain was fresher for ETH, since=1 fresher for BTC). Consider making
+  the runbook mandate fetching both and selecting on newest bar timestamp,
+  rather than preferring either.
+- Missed check-ins leave a silent data gap. Five days elapsed between the
+  20 Aug morning run and 25 Aug with no journal entry. A staleness age is
+  reported by `datastore.py check`, but nothing distinguishes "market closed"
+  from "no run happened". Worth a heartbeat/last-run-age line on the dashboard.
+- Equity daily bars can only be refreshed by TIME_SERIES_DAILY. When that URL
+  is unavailable to a run, the stock leg trades on short windows with only a
+  flag to show for it. Consider whether the engine should skip or freeze
+  stock-side sleeves when their history exceeds a staleness threshold, instead
+  of trading and flagging. NOT a parameter change — a data-integrity gate.
