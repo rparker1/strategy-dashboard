@@ -30,3 +30,21 @@
   flag to show for it. Consider whether the engine should skip or freeze
   stock-side sleeves when their history exceeds a staleness threshold, instead
   of trading and flagging. NOT a parameter change — a data-integrity gate.
+
+## 2026-08-26 (evening)
+- **Alpha Vantage `outputsize=full` is no longer a usable cache-bust.** The endpoint
+  now rejects it as premium-only for TIME_SERIES_DAILY, which removes the fallback
+  the runbook and the check-in prompt both rely on. MSFT went unrefreshed for a
+  second consecutive check-in as a result. For the 60-day review: either source
+  equity bars from a provider that does not sit behind this cache, or add a
+  documented secondary URL form that is known to miss the cache.
+- **Stale-symbol marking policy.** `latest.json` can carry a quote forward
+  indefinitely with no link to any bar (MSFT sat at 481.63 for days against a last
+  close of 495.40). Consider having `ingest-quotes` expire any quote older than N
+  days back to the last close automatically, rather than leaving it to the operator
+  to spot.
+- **Kraken first-fetch staleness is now confirmed intermittent per pair**, not just
+  per endpoint: ETH returned a cached incomplete bar while BTC and SOL were current
+  in the same batch. A cheap defence is to always fetch the `since=1` variant for
+  every pair rather than only on suspicion.
+All three are data-integrity items. No strategy parameters touched.
