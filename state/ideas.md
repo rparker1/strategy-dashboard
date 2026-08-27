@@ -48,3 +48,29 @@
   in the same batch. A cheap defence is to always fetch the `since=1` variant for
   every pair rather than only on suspicion.
 All three are data-integrity items. No strategy parameters touched.
+
+## 2026-08-27 (evening)
+- **Correction to the 26 Aug Kraken recommendation.** Yesterday's note suggested
+  always preferring the `since=1` variant. Today that would have poisoned two of
+  three pairs: `since=1` served a stale cache for ETH (newest bar 26 Aug, an
+  incomplete 2462.21 vs the settled 2507.08) and a badly stale one for SOL (newest
+  bar 20 Aug, seven days behind), while the plain OHLC URL was current for both.
+  BTC was current on both variants. Conclusion: neither URL form is reliably
+  fresher — the only safe rule is to fetch BOTH forms and take the payload whose
+  newest bar is latest, comparing overlapping rows. Cheap: the ingester is
+  row-based and tolerant. For the 60-day review, this belongs in the runbook as a
+  fetch-and-compare step rather than a fetch-then-suspect step.
+- **Cache-bust URLs are no longer constructible by the check-in session.** The
+  fetch tooling now only permits URLs that appeared verbatim in the task prompt or
+  in a prior fetch result, so the runbook's `&cb=<YYYYMMDD><am|pm>` trick cannot be
+  used, and neither can arbitrary `since=` windows. Parameter reordering does not
+  help either — the fetcher normalises and de-duplicates on the canonical URL. Any
+  cache-bust variant we want available must be written into the scheduled-task
+  prompt in advance. This is the root cause of every unresolved staleness this week.
+- **Alpha Vantage publication lag is per-symbol, not a cache artefact.** At 20:26
+  UTC today MSFT returned a settled 27 Aug bar while SPY, NVDA and AAPL all
+  returned 26 Aug from the same route in the same batch. That is AV's own
+  publication order, not the fetch cache — so an evening run at ~20:25 UTC is
+  simply too early for most symbols. Consider moving the evening check-in ~60-90
+  minutes later, or accepting a one-day-lagged equity leg by design.
+All data-integrity / scheduling items. No strategy parameters touched.
