@@ -114,6 +114,24 @@ Read the run output flags and `state/journal.jsonl` tail. Rules of engagement:
 
 ## Known data hazards (learned the hard way)
 
+- WebFetch payloads that exceed the context limit are written to a file on the
+  host, and that file IS readable from the shell at
+  `/sessions/<session>/mnt/.claude/skills/../projects/<project>/<uuid>/tool-results/`.
+  `cp` it into `data/raw/` — this gives a BYTE-EXACT payload with zero
+  transcription/summariser risk, and is the preferred route for Kraken OHLC.
+  Verified 2026-09-02.
+- Alpha Vantage TIME_SERIES_DAILY compact payloads return inline, so they must
+  be hand-transcribed. Transcribe only the rows newer than stored coverage plus
+  3-4 overlap rows, write them as `date,o,h,l,c,volume` CSV lines (ingest_av's
+  CSV fallback accepts this, needs >=5 rows), then diff the overlap rows against
+  the stored CSV to prove no digit corruption.
+- WebFetch enforces a URL provenance set: only URLs that appear verbatim in the
+  task prompt (or in an earlier fetch result) can be fetched. Ad-hoc
+  cache-buster query params CANNOT be invented mid-run. Keep every URL variant
+  the run might need in the task prompt.
+- The shell sandbox has NO outbound network access to api.kraken.com or
+  alphavantage.co (curl returns HTTP 000). WebFetch is the only data route.
+
 - Kraken **Ticker** endpoint returns months-stale cached data via this fetch
   route. OHLC endpoint is verified good. Use OHLC only.
 - Large fetch payloads get truncated mid-JSON. The Kraken ingester is

@@ -74,3 +74,13 @@ All three are data-integrity items. No strategy parameters touched.
   simply too early for most symbols. Consider moving the evening check-in ~60-90
   minutes later, or accepting a one-day-lagged equity leg by design.
 All data-integrity / scheduling items. No strategy parameters touched.
+
+## 2026-09-02 (evening run)
+- Kraken SOL/USD is the least reliable feed of the three: the plain OHLC call
+  served a one-day-old cached page and the since=1 variant was 13 days stale.
+  Consider adding a second crypto source (e.g. Coinbase or Bitstamp daily
+  candles) to the task prompt's URL provenance list purely as a SOL fallback.
+  Infrastructure only — no strategy parameter implication.
+- Alpha Vantage GLOBAL_QUOTE has now failed twice (29 Aug) while
+  TIME_SERIES_DAILY worked. Suggest dropping GLOBAL_QUOTE from the morning run
+  entirely and relying on last close, saving quota.
